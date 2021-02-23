@@ -50,6 +50,8 @@ from codechecker_report_converter.golint.analyzer_result import \
     GolintAnalyzerResult  # noqa
 from codechecker_report_converter.pyflakes.analyzer_result import \
     PyflakesAnalyzerResult  # noqa
+from codechecker_report_converter.pylama.analyzer_result import \
+    PylamaAnalyzerResult  # noqa
 from codechecker_report_converter.markdownlint.analyzer_result import \
     MarkdownlintAnalyzerResult  # noqa
 from codechecker_report_converter.coccinelle.analyzer_result import \
@@ -90,6 +92,7 @@ supported_converters = {
     MSANAnalyzerResult.TOOL_NAME: MSANAnalyzerResult,
     PylintAnalyzerResult.TOOL_NAME: PylintAnalyzerResult,
     PyflakesAnalyzerResult.TOOL_NAME: PyflakesAnalyzerResult,
+    PylamaAnalyzerResult.TOOL_NAME: PylamaAnalyzerResult,
     TSANAnalyzerResult.TOOL_NAME: TSANAnalyzerResult,
     TSLintAnalyzerResult.TOOL_NAME: TSLintAnalyzerResult,
     UBSANAnalyzerResult.TOOL_NAME: UBSANAnalyzerResult,
