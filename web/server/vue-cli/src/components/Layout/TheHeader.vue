@@ -142,19 +142,11 @@ export default {
         },
         {
           name: "Reports",
-          icon: "mdi-clipboard-text-multiple-outline",
+          icon: "mdi-bug",
           route: "reports",
           active: [ "reports" ],
           exact: true,
           query: defaultReportFilterValues,
-          hide: [ "products", "login", "404" ]
-        },
-        {
-          name: "Run history",
-          icon: "mdi-history",
-          route: "run-history",
-          active: [ "run-history" ],
-          exact: true,
           hide: [ "products", "login", "404" ]
         },
         {

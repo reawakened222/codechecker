@@ -151,6 +151,7 @@ struct ReportDetails {
   1: BugPathEvents pathEvents,
   2: BugPath       executionPath,
   3: optional ExtendedReportDataList extendedData,
+  4: optional CommentDataList comments,
 }
 
 typedef string AnalyzerType
@@ -203,8 +204,9 @@ typedef list<RunHistoryData> RunHistoryDataList
  * If exactMatch field is True it will use exact match for run names.
  */
 struct RunHistoryFilter {
-  1: list<string> tagNames,     // Part of the tag names.
-  2: optional list<i64> tagIds, // Tag ids.
+  1: list<string>          tagNames, // Part of the tag names.
+  2: optional list<i64>    tagIds,   // Tag ids.
+  3: optional DateInterval stored,   // Date interval when the run was stored at.
 }
 
 struct RunTagCount {
@@ -355,6 +357,16 @@ struct SourceComponentData {
 }
 typedef list<SourceComponentData> SourceComponentDataList
 
+struct AnalysisFailureInfo {
+  1: string runName,  // Name of the run where the file is failed to analyze.
+}
+typedef map<string, list<AnalysisFailureInfo>> FailedFiles
+
+struct ExportData {
+  1: map<string, CommentDataList> comments,   // Map comments to report hashes.
+  2: map<string, ReviewData>      reviewData, // Map review data to report hashes.
+}
+
 service codeCheckerDBAccess {
 
   // Gives back all analyzed runs.
@@ -400,7 +412,8 @@ service codeCheckerDBAccess {
   list<string> getDiffResultsHash(1: list<i64>    runIds,
                                   2: list<string> reportHashes,
                                   3: DiffType     diffType,
-                                  4: optional list<DetectionStatus> skipDetectionStatuses)
+                                  4: optional list<DetectionStatus> skipDetectionStatuses,
+                                  5: optional list<i64> tagIds)
                                   throws (1: codechecker_api_shared.RequestFailed requestError)
 
   // PERMISSION: PRODUCT_ACCESS
@@ -436,6 +449,22 @@ service codeCheckerDBAccess {
                         2: ReportFilter reportFilter,
                         3: CompareData  cmpData)
                         throws (1: codechecker_api_shared.RequestFailed requestError),
+
+  // Get the number of failed files in the latest storage of the given runs.
+  // If an empty run id list is provided the number of failed files will be
+  // calculated for all of the available runs.
+  // PERMISSION: PRODUCT_ACCESS
+  i64 getFailedFilesCount(1: list<i64> runIds)
+                          throws (1: codechecker_api_shared.RequestFailed requestError),
+
+  // Get files which failed to analyze in the latest storage of the given runs.
+  // If an empty run id list is provided the failed files will be returned for
+  // all of the available runs.
+  // For each files it will return a list where each element contains
+  // information in which run the failure happened.
+  // PERMISSION: PRODUCT_ACCESS
+  FailedFiles getFailedFiles(1: list<i64> runIds)
+                             throws (1: codechecker_api_shared.RequestFailed requestError),
 
   // gives back the all marked region and message for a report
   // PERMISSION: PRODUCT_ACCESS
@@ -701,4 +730,14 @@ service codeCheckerDBAccess {
   AnalyzerStatisticsData getAnalysisStatistics(1: i64 runId,
                                                2: i64 runHistoryId)
                                                throws (1: codechecker_api_shared.RequestFailed requestError),
+  
+  // Export data from the server
+  // PERMISSION: PRODUCT_ACCESS
+  ExportData exportData(1: RunFilter runFilter)
+                        throws (1: codechecker_api_shared.RequestFailed requestError),
+
+  // Import data from the server.
+  // PERMISSION: PRODUCT_ADMIN
+  bool importData(1: ExportData exportData)
+                  throws (1: codechecker_api_shared.RequestFailed requestError),  
 }

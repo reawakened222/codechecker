@@ -26,15 +26,6 @@ const filterCommands = {
     return this;
   },
 
-  closeFilterSettings() {
-    this.click("@settings");
-
-    const reportPage = this.api.page.report();
-    reportPage.expect.section("@settingsMenu").to.not.be.present.before(5000);
-
-    return this;
-  },
-
   selectedItemClick(index) {
     return this.click({ selector: "@selectedItems", index: index});
   }
@@ -249,15 +240,15 @@ module.exports = {
     runSettingsMenu: {
       selector: ".settings-menu.menuable__content__active",
       elements: {
-        ...Object.keys(settingsMenuElements).reduce((acc, k) => {
-          acc[k] = `.v-window-item--active ${settingsMenuElements[k]}`;
-          return acc;
-        }, {}),
-        runTab: ".v-tab:first-child",
-        runTabItem: ".run-tab-item",
-        tagTab: ".v-tab:last-child",
-        activeTagTab: ".v-tab:last-child.v-tab--active",
-        tagTabItem: ".tag-tab-item"
+        ...settingsMenuElements,
+        selectTagButton: ".v-btn"
+      },
+      commands: [ menuCommands ]
+    },
+    tagSettingsMenu: {
+      selector: ".select-tag-menu.menuable__content__active",
+      elements: {
+        ...settingsMenuElements
       },
       commands: [ menuCommands ]
     },

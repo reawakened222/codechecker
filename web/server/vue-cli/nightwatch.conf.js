@@ -1,5 +1,6 @@
 const host = process.env.HOST || "localhost";
 const port = process.env.PORT || 8001;
+const chromeHeadless = process.env.CHROME_HEADLESS;
 
 module.exports = {
   src_folders: [ "e2e/specs" ],
@@ -22,6 +23,7 @@ module.exports = {
         host: "127.0.0.1",
         server_path: require("selenium-server").path,
         log_path: "e2e/output",
+        check_process_delay: 5000,
         cli_args: {
           "webdriver.gecko.driver": require("geckodriver").path,
           "webdriver.chrome.driver": require("chromedriver").path
@@ -38,6 +40,7 @@ module.exports = {
       desiredCapabilities: {
         browserName: "chrome",
         chromeOptions : {
+          args: [ ...[ chromeHeadless ? "--headless" : undefined ] ],
           w3c: false
         }
       }

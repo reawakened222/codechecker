@@ -6,6 +6,7 @@
     :fetch-items="fetchItems"
     :loading="loading"
     :selected-items="selectedItems"
+    :panel="panel"
     @clear="clear(true)"
     @input="setSelectedItems"
   >
@@ -34,6 +35,11 @@
           </li>
         </ul>
       </tooltip-help-icon>
+
+      <selected-toolbar-title-items
+        v-if="selectedItems"
+        :value="selectedItems"
+      />
     </template>
   </select-option>
 </template>
@@ -46,7 +52,7 @@ import TooltipHelpIcon from "@/components/TooltipHelpIcon";
 import { ReviewStatusIcon } from "@/components/Icons";
 import { ReviewStatusMixin } from "@/mixins";
 
-import SelectOption from "./SelectOption/SelectOption";
+import { SelectOption, SelectedToolbarTitleItems } from "./SelectOption";
 import BaseSelectOptionFilterMixin from "./BaseSelectOptionFilter.mixin";
 
 export default {
@@ -54,6 +60,7 @@ export default {
   components: {
     SelectOption,
     ReviewStatusIcon,
+    SelectedToolbarTitleItems,
     TooltipHelpIcon
   },
   mixins: [ BaseSelectOptionFilterMixin, ReviewStatusMixin ],

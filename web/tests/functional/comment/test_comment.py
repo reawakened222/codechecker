@@ -160,7 +160,7 @@ class TestComment(unittest.TestCase):
         self.assertEqual(num_comment, 1)
 
         # Edit the message of the first remaining comment
-        new_msg = 'New msg'
+        new_msg = "New msg'\"`"
         success = self._cc_client.updateComment(comments[0].id, new_msg)
         self.assertTrue(success)
         logging.debug('Comment edited successfully')
@@ -181,6 +181,16 @@ class TestComment(unittest.TestCase):
         self.assertEqual(len(user_comments), 1)
         self.assertEqual(user_comments[0].message, new_msg)
         self.assertEqual(len(system_comments), 1)
+
+        # Test user and system comments fetched
+        details = self._cc_client.getReportDetails(bug.reportId)
+        user_c, system_c = separate_comments(details.comments)
+
+        self.assertEqual(len(user_c), len(user_comments))
+        self.assertEqual(user_c[0].message, user_comments[0].message)
+
+        self.assertEqual(len(system_c), len(system_comments))
+        self.assertEqual(system_c[0].message, system_comments[0].message)
 
         # Remove the last comment for the first bug
         success = self._cc_client.removeComment(user_comments[0].id)

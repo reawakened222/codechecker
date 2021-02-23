@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import tempfile
+from typing import Dict, List, Tuple
 import zipfile
 import zlib
 
@@ -33,7 +34,8 @@ from codechecker_client import client as libclient
 from codechecker_client.metadata import merge_metadata_json
 
 from codechecker_common import arg, logger, plist_parser, util, cmd_config
-from codechecker_common.output_formatters import twodim_to_str
+from codechecker_common.report import Report
+from codechecker_common.output import twodim
 from codechecker_common.source_code_comment_handler import \
     SourceCodeCommentHandler
 from codechecker_report_hash.hash import HashType, replace_report_hash
@@ -123,11 +125,20 @@ database.""",
         # Epilogue is shown after the arguments when the help is queried
         # directly.
         'epilog': """
-environment variables:
+Environment variables
+------------------------------------------------
   CC_PASS_FILE     The location of the password file for auto login. By default
                    CodeChecker will use '~/.codechecker.passwords.json' file.
                    It can also be used to setup different credential files to
                    login to the same server with a different user.
+
+  CC_SESSION_FILE  The location of the session file where valid sessions are
+                   stored. This file will be automatically created by
+                   CodeChecker. By default CodeChecker will use
+                   '~/.codechecker.session.json'. This can be used if
+                   restrictive permissions forbid CodeChecker from creating
+                   files in the users home directory (e.g. in a CI
+                   environment).
 
 
 The results can be viewed by connecting to such a server in a Web browser or
@@ -318,11 +329,12 @@ def collect_report_files(inputs):
     return plist_report_files
 
 
-def parse_report_file(plist_file):
+def parse_report_file(plist_file: str) \
+        -> Tuple[Dict[int, str], List[Report]]:
     """Parse a plist report file and return the list of reports and the
     list of source files mentioned in the report file.
     """
-    files = []
+    files = {}
     reports = []
 
     try:
@@ -335,7 +347,7 @@ def parse_report_file(plist_file):
         return files, reports
 
 
-def collect_file_info(files):
+def collect_file_info(files: Dict[int, str]) -> Dict:
     """Collect file information about given list of files like:
        - last modification time
        - content hash
@@ -343,7 +355,7 @@ def collect_file_info(files):
        be empty.
     """
     res = {}
-    for sf in files:
+    for sf in files.values():
         res[sf] = {}
         if os.path.isfile(sf):
             res[sf]["hash"] = get_file_content_hash(sf)
@@ -611,9 +623,10 @@ def assemble_zip(inputs, zip_file, client):
 
     file_hashes = list(hash_to_file.keys())
 
-    LOG.debug("Get missing content hashes from the server.")
+    LOG.info("Get missing file content hashes from the server...")
     necessary_hashes = client.getMissingContentHashes(file_hashes) \
         if file_hashes else []
+    LOG.info("Get missing file content hashes done.")
 
     if not hash_to_file:
         LOG.warning("There is no report to store. After uploading these "
@@ -635,7 +648,12 @@ def assemble_zip(inputs, zip_file, client):
             if h in necessary_hashes or h in file_hash_with_review_status:
                 LOG.debug("File contents for '%s' needed by the server", f)
 
-                zipf.write(f, os.path.join('root', f.lstrip('/')))
+                file_path = os.path.join('root', f.lstrip('/'))
+
+                try:
+                    zipf.getinfo(file_path)
+                except KeyError:
+                    zipf.write(f, file_path)
 
         zipf.writestr('content_hashes.json', json.dumps(file_to_hash))
 
@@ -836,18 +854,21 @@ def main(args):
             print(ex)
             import traceback
             traceback.print_stack()
-
-        zip_size = os.stat(zip_file).st_size
-        LOG.debug("Assembling zip done, size is %s",
-                  sizeof_fmt(zip_size))
-
-        if zip_size > MAX_UPLOAD_SIZE:
-            LOG.error("The result list to upload is too big (max: %s).",
-                      sizeof_fmt(MAX_UPLOAD_SIZE))
+            LOG.error("Failed to assemble zip file.")
             sys.exit(1)
 
+        zip_size = os.stat(zip_file).st_size
+        if zip_size > MAX_UPLOAD_SIZE:
+            LOG.error("The result list to upload is too big (max: %s): %s.",
+                      sizeof_fmt(MAX_UPLOAD_SIZE), sizeof_fmt(zip_size))
+            sys.exit(1)
+
+        b64zip = ""
         with open(zip_file, 'rb') as zf:
             b64zip = base64.b64encode(zf.read()).decode("utf-8")
+        if len(b64zip) == 0:
+            LOG.info("Zip content is empty, nothing to store!")
+            sys.exit(1)
 
         context = webserver_context.get_context()
 
@@ -856,7 +877,8 @@ def main(args):
 
         description = args.description if 'description' in args else None
 
-        LOG.info("Storing results to the server...")
+        LOG.info("Storing results (%s) to the server...", sizeof_fmt(zip_size))
+
         client.massStoreRun(args.name,
                             args.tag if 'tag' in args else None,
                             str(context.version),
@@ -873,9 +895,8 @@ def main(args):
     except RequestFailed as reqfail:
         if reqfail.errorCode == ErrorCode.SOURCE_FILE:
             header = ['File', 'Line', 'Checker name']
-            table = twodim_to_str('table',
-                                  header,
-                                  [c.split('|') for c in reqfail.extraInfo])
+            table = twodim.to_str(
+                'table', header, [c.split('|') for c in reqfail.extraInfo])
             LOG.warning("Setting the review statuses for some reports failed "
                         "because of non valid source code comments: "
                         "%s\n %s", reqfail.message, table)

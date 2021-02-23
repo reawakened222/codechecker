@@ -86,6 +86,11 @@ _User guide_) for information about the arguments which are not documented
 here. For example the CTU related arguments are documented at `analyze`
 subcommand.
 
+<details>
+  <summary>
+    <i>$ <b>CodeChecker check --help</b> (click to expand)</i>
+  </summary>
+
 ```
 usage: CodeChecker check [-h] [-o OUTPUT_DIR] [-t {plist}] [-q]
                          [--keep-gcc-include-fixed] [--keep-gcc-intrin]
@@ -161,7 +166,7 @@ optional arguments:
                         Set verbosity level.
 
 log arguments:
-  
+
   Specify how the build information database should be obtained. You need to
   specify either an already existing log file, or a build command which will be
   used to generate a log file on the fly.
@@ -248,8 +253,10 @@ analyzer arguments:
                         options can be printed with 'CodeChecker analyzers
                         --analyzer-config'. To disable the default behaviour
                         of this option you can use the 'clang-tidy:take-
-                        config-from-directory=true' option. (default: ['clang-
-                        tidy:HeaderFilterRegex=.*'])
+                        config-from-directory=true' option. If the file at
+                        --tidyargs contains a -config flag then those options
+                        extend these and override "HeaderFilterRegex" if any.
+                        (default: ['clang-tidy:HeaderFilterRegex=.*'])
   --checker-config [CHECKER_CONFIG [CHECKER_CONFIG ...]]
                         Checker configuration options in the following format:
                         analyzer:key=value. The collection of the options can
@@ -273,7 +280,7 @@ analyzer arguments:
                         solver only. (default: on)
 
 cross translation unit analysis arguments:
-  
+
   These arguments are only available if the Clang Static Analyzer supports
   Cross-TU analysis. By default, no CTU analysis is run when 'CodeChecker check'
   is called.
@@ -295,19 +302,19 @@ cross translation unit analysis arguments:
                         If Cross-TU analysis is enabled and fails for some
                         reason, try to re analyze the same translation unit
                         without Cross-TU enabled.
-                         [--ctu-ast-mode {load-from-pch,parse-on-demand}]
   --ctu-ast-mode {load-from-pch,parse-on-demand}
-                        Choose the way ASTs are loaded during CTU analysis.
-                        Mode 'load-from-pch' generates PCH format serialized
-                        ASTs during the 'collect' phase. Mode 'parse-on-
-                        demand' only generates the invocations needed to parse
-                        the ASTs. Mode 'load-from-pch' can use significant
-                        disk-space for the serialized ASTs, while mode 'parse-
-                        on-demand' can incur some runtime CPU overhead in the
-                        second phase of the analysis. (default: parse-on-demand)
+                        Choose the way ASTs are loaded during CTU analysis. Only
+                        available if CTU mode is enabled. Mode 'load-from-pch'
+                        generates PCH format serialized ASTs during the
+                        'collect' phase. Mode 'parse-on-demand' only generates
+                        the invocations needed to parse the ASTs. Mode
+                        'load-from-pch' can use significant disk-space for the
+                        serialized ASTs, while mode 'parse-on-demand' can incur
+                        some runtime CPU overhead in the second phase of the
+                        analysis. (default: parse-on-demand)
 
 checker configuration:
-  
+
   Checkers
   ------------------------------------------------
   The analyzer performs checks that are categorized into families or "checkers".
@@ -319,7 +326,7 @@ checker configuration:
   'core.uninitialized' group. Please consult the manual for details. Disabling
   certain checkers - such as the 'core' group - is unsupported by the LLVM/Clang
   community, and thus discouraged.
-  
+
   Compiler warnings and errors
   ------------------------------------------------
   Compiler warnings are diagnostic messages that report constructions that are
@@ -375,18 +382,22 @@ checker configuration:
                         labeled: 'profile:security' or 'guideline:sei-cert'.
   --enable-all          Force the running analyzers to use almost every
                         checker available. The checker groups 'alpha.',
-                        'debug.' and 'osx.' (on Linux) are NOT enabled
-                        automatically and must be EXPLICITLY specified.
-                        WARNING! Enabling all checkers might result in the
-                        analysis losing precision and stability, and could
-                        even result in a total failure of the analysis. USE
-                        WISELY AND AT YOUR OWN RISK!
+                        'debug.','osx.', 'abseil-', 'android-', 'darwin-',
+                        'objc-', 'cppcoreguidelines-', 'fuchsia.', 'fuchsia-',
+                        'hicpp-', 'llvm-', 'llvmlibc-', 'google-', 'zircon-',
+                        'osx.' (on Linux) are NOT enabled automatically and
+                        must be EXPLICITLY specified. WARNING! Enabling all
+                        checkers might result in the analysis losing precision
+                        and stability, and could even result in a total
+                        failure of the analysis. USE WISELY AND AT YOUR OWN
+                        RISK!
 
 output arguments:
   --print-steps         Print the steps the analyzers took in finding the
                         reported defect.
 
-environment variables:
+Environment variables
+------------------------------------------------
   CC_ANALYZERS_FROM_PATH   Set to `yes` or `1` to enforce taking the analyzers
                            from the `PATH` instead of the given binaries.
   CC_CLANGSA_PLUGIN_DIR    If the CC_ANALYZERS_FROM_PATH environment variable
@@ -395,8 +406,15 @@ environment variables:
                            variable.
   CC_SEVERITY_MAP_FILE     Path of the checker-severity mapping config file.
                            Default: <package>/config/checker_severity_map.json
+  CC_LOGGER_DEBUG_FILE     If -b and -o flags are used with debug logs, the
+                           logging phase emits its debug logs in
+                           'codechecker.logger.debug' under the output
+                           directory by default. This environment variable
+                           can be given a file path which overrides this
+                           default location.
 
-issue hashes:
+Issue hashes
+------------------------------------------------
 - By default the issue hash calculation method for 'Clang Static Analyzer' is
 context sensitive. It means the hash will be generated based on the following
 information:
@@ -434,6 +452,17 @@ OUR RECOMMENDATION: we recommend you to use 'context-free-v2' hash because the
 hash will not be changed so easily for example on code indentation or when a
 checker is renamed.
 
+For more information see:
+https://github.com/Ericsson/codechecker/blob/master/docs/analyzer/report_identification.md
+
+Exit status
+------------------------------------------------
+0 - Successful analysis and no new reports
+1 - CodeChecker error
+2 - At least one report emitted by an analyzer and there is no analyzer failure
+3 - Analysis of at least one translation unit failed
+128+signum - Terminating on a fatal signal whose number is signum
+
 If you wish to reuse the logfile resulting from executing the build, see
 'CodeChecker log'. To keep analysis results for later, see and use
 'CodeChecker analyze'. To print human-readable output from previously saved
@@ -443,6 +472,7 @@ command actually builds the files -- it is advised to execute builds on empty
 trees, aka. after a 'make clean', as CodeChecker only analyzes files that had
 been used by the build system.
 ```
+</details>
 
 # Available CodeChecker analyzer subcommands <a name="available-analyzer-commands"></a>
 
@@ -452,6 +482,11 @@ The first step in performing an analysis on your project is to record
 information about the files in your project for the analyzers. This is done by
 recording a build of your project, which is done by the command `CodeChecker
 log`.
+
+<details>
+  <summary>
+    <i>$ <b>CodeChecker log --help</b> (click to expand)</i>
+  </summary>
 
 ```
 usage: CodeChecker log [-h] -o LOGFILE -b COMMAND [-q]
@@ -480,7 +515,8 @@ optional arguments:
   --verbose {info,debug,debug_analyzer}
                         Set verbosity level.
 
-environment variables:
+Environment variables
+------------------------------------------------
   CC_LOGGER_GCC_LIKE       Set to to a colon separated list to change which
                            compilers should be logged. For example (default):
                            export CC_LOGGER_GCC_LIKE="gcc:g++:clang:clang++:
@@ -512,6 +548,7 @@ environment variables:
                            a 'codechecker.logger.debug' file beside the log
                            file.
 ```
+</details>
 
 Please note, that only the files that are used in the given `--build` argument
 will be recorded. To analyze your whole project, make sure your build tree has
@@ -594,6 +631,9 @@ su myuser  -c "CodeChecker log -o log_dir/compile_commands.json -b 'g++ main.cpp
 
 
 ### BitBake
+
+Note: for an alternative integration, check-out [meta-codechecker](https://github.com/dl9pf/meta-codechecker).
+
 Do the following steps to log compiler calls made by
 [BitBake](https://github.com/openembedded/bitbake) using CodeChecker.
 
@@ -706,6 +746,11 @@ CodeChecker analyze ../codechecker_myProject_build.log -o my_plists
 
 `CodeChecker analyze` supports a myriad of fine-tuning arguments, explained
 below:
+
+<details>
+  <summary>
+    <i>$ <b>CodeChecker analyze --help</b> (click to expand)</i>
+  </summary>
 
 ```
 usage: CodeChecker analyze [-h] [-j JOBS]
@@ -823,7 +868,8 @@ optional arguments:
   --verbose {info,debug,debug_analyzer}
                         Set verbosity level.
 
-environment variables:
+Environment variables
+------------------------------------------------
   CC_ANALYZERS_FROM_PATH   Set to `yes` or `1` to enforce taking the analyzers
                            from the `PATH` instead of the given binaries.
   CC_CLANGSA_PLUGIN_DIR    If the CC_ANALYZERS_FROM_PATH environment variable
@@ -833,6 +879,7 @@ environment variables:
   CC_SEVERITY_MAP_FILE     Path of the checker-severity mapping config file.
                            Default: <package>/config/checker_severity_map.json
 ```
+</details>
 
 
 ### _Skip_ file <a name="skip"></a>
@@ -878,13 +925,13 @@ one explicitly specified to **be analyzed** (`/dir/do.check.this.file`).
 ```
 
 In the above example, `important_file.cpp` will be analyzed even if every file
-where the path matches to `/my_project/my_lib_to_skip` will be skiped.  
-Every other file where the path contains `/myproject` except the files in the 
+where the path matches to `/my_project/my_lib_to_skip` will be skiped.
+Every other file where the path contains `/myproject` except the files in the
 `my_project/3pplib` will be analyzed.
 
 The provided *shell-style* pattern is converted to a regex with the [fnmatch.translate](https://docs.python.org/2/library/fnmatch.html#fnmatch.translate).
 
-Please note that when `-i SKIPFILE` is used along with `--stats` or 
+Please note that when `-i SKIPFILE` is used along with `--stats` or
 `--ctu` the skip list will be ignored in the pre-analysis phase. This means
 that statistics and ctu-pre-analysis will be created for *all* files in the
 *compilation database*.
@@ -898,7 +945,7 @@ analyzer arguments:
                         Currently supported analyzers are: clangsa, clang-
                         tidy.
   --add-compiler-defaults
-                        DEPRECATED. Always True. 
+                        DEPRECATED. Always True.
                         Retrieve compiler-specific configuration from the
                         compilers themselves, and use them with Clang. This is
                         used when the compiler on the system is special, e.g.
@@ -940,8 +987,10 @@ analyzer arguments:
                         options can be printed with 'CodeChecker analyzers
                         --analyzer-config'. To disable the default behaviour
                         of this option you can use the 'clang-tidy:take-
-                        config-from-directory=true' option. (default: ['clang-
-                        tidy:HeaderFilterRegex=.*'])
+                        config-from-directory=true' option. If the file at
+                        --tidyargs contains a -config flag then those options
+                        extend these and override "HeaderFilterRegex" if any.
+                        (default: ['clang-tidy:HeaderFilterRegex=.*'])
   --checker-config [CHECKER_CONFIG [CHECKER_CONFIG ...]]
                         Checker configuration options in the following format:
                         analyzer:key=value. The collection of the options can
@@ -1013,7 +1062,7 @@ Lets assume you have a configuration file
 ```
 This configuration file example contains configuration options for multiple
 codechecker subcommands (analyze, parse, server, store) so not just the
-`analyze` subcommand can be configured like this.  
+`analyze` subcommand can be configured like this.
 The focus is on the `analyze` subcommand configuration in the next examples.
 
 If you run the following command:
@@ -1255,12 +1304,15 @@ checker configuration:
                         labeled: 'profile:security' or 'guideline:sei-cert'.
   --enable-all          Force the running analyzers to use almost every
                         checker available. The checker groups 'alpha.',
-                        'debug.' and 'osx.' (on Linux) are NOT enabled
-                        automatically and must be EXPLICITLY specified.
-                        WARNING! Enabling all checkers might result in the
-                        analysis losing precision and stability, and could
-                        even result in a total failure of the analysis. USE
-                        WISELY AND AT YOUR OWN RISK!
+                        'debug.','osx.', 'abseil-', 'android-', 'darwin-',
+                        'objc-', 'cppcoreguidelines-', 'fuchsia.', 'fuchsia-',
+                        'hicpp-', 'llvm-', 'llvmlibc-', 'google-', 'zircon-',
+                        'osx.' (on Linux) are NOT enabled automatically and
+                        must be EXPLICITLY specified. WARNING! Enabling all
+                        checkers might result in the analysis losing precision
+                        and stability, and could even result in a total
+                        failure of the analysis. USE WISELY AND AT YOUR OWN
+                        RISK!
 ```
 
 Both `--enable` and `--disable` take individual checkers, checker groups or
@@ -1395,16 +1447,16 @@ cross translation unit analysis arguments:
                         analysis, using already available extra files in
                         '<OUTPUT_DIR>/ctu-dir'. (These files will not be
                         cleaned up in this mode.)
-
   --ctu-ast-mode {load-from-pch,parse-on-demand}
-                        Choose the way ASTs are loaded during CTU analysis.
-                        Mode 'load-from-pch' generates PCH format serialized
-                        ASTs during the 'collect' phase. Mode 'parse-on-
-                        demand' only generates the invocations needed to parse
-                        the ASTs. Mode 'load-from-pch' can use significant
-                        disk-space for the serialized ASTs, while mode 'parse-
-                        on-demand' can incur some runtime CPU overhead in the
-                        second phase of the analysis. (default: parse-on-demand)
+                        Choose the way ASTs are loaded during CTU analysis. Only
+                        available if CTU mode is enabled. Mode 'load-from-pch'
+                        generates PCH format serialized ASTs during the
+                        'collect' phase. Mode 'parse-on-demand' only generates
+                        the invocations needed to parse the ASTs. Mode
+                        'load-from-pch' can use significant disk-space for the
+                        serialized ASTs, while mode 'parse-on-demand' can incur
+                        some runtime CPU overhead in the second phase of the
+                        analysis. (default: parse-on-demand)
 ```
 
 ### Statistical analysis mode <a name="statistical"></a>
@@ -1445,7 +1497,7 @@ Statistics analysis feature arguments:
                         function (calculated as calls  with a property/all
                         calls). CodeChecker will warn for calls of f that do
                         not have that property.(default: 0.85)
- 
+
 ```
 
 ## `parse` <a name="parse"></a>
@@ -1454,20 +1506,25 @@ Statistics analysis feature arguments:
 (such as `plist` files), usually previously generated by `CodeChecker analyze`.
 `parse` prints analysis results to the standard output.
 
+<details>
+  <summary>
+    <i>$ <b>CodeChecker parse --help</b> (click to expand)</i>
+  </summary>
+
 ```
-usage: CodeChecker parse [-h] [-t {plist}] [-e {html,json,codeclimate}]
-                         [-o OUTPUT_PATH] [-c] [--suppress SUPPRESS]
-                         [--export-source-suppress] [--print-steps]
-                         [-i SKIPFILE]
+Usage: CodeChecker parse [-h] [--config CONFIG_FILE] [-t {plist}]
+                         [-e {html,json,codeclimate,gerrit}] [-o OUTPUT_PATH]
+                         [--suppress SUPPRESS] [--export-source-suppress]
+                         [--print-steps] [-i SKIPFILE]
                          [--trim-path-prefix [TRIM_PATH_PREFIX [TRIM_PATH_PREFIX ...]]]
                          [--review-status [REVIEW_STATUS [REVIEW_STATUS ...]]]
-                         [--verbose {info,debug,debug_analyzer}]
+                         [--verbose {info,debug_analyzer,debug}]
                          file/folder [file/folder ...]
 
-Parse and pretty-print the summary and results from one or more 'codechecker-
-analyze' result files. Bugs which are commented by using "false_positive",
-"suppress" and "intentional" source code comments will not be printed by the
-`parse` command.
+Parse and pretty-print the summary and results from one or more
+'codechecker-analyze' result files. Bugs which are commented by using
+"false_positive", "suppress" and "intentional" source code comments will not be
+printed by the `parse` command.
 
 positional arguments:
   file/folder           The analysis result files and/or folders containing
@@ -1508,20 +1565,20 @@ optional arguments:
                         should be omitted from analysis. Please consult the
                         User guide on how a Skipfile should be laid out.
   --trim-path-prefix [TRIM_PATH_PREFIX [TRIM_PATH_PREFIX ...]]
-                        Removes leading path from files which will be
-                        printed. So if you have /a/b/c/x.cpp and /a/b/c/y.cpp
-                        then by removing "/a/b/" prefix will print files like
-                        c/x.cpp and c/y.cpp. If multiple prefix is given, the
-                        longest match will be removed.
+                        Removes leading path from files which will be printed.
+                        So if you have /a/b/c/x.cpp and /a/b/c/y.cpp then by
+                        removing "/a/b/" prefix will print files like c/x.cpp
+                        and c/y.cpp. If multiple prefix is given, the longest
+                        match will be removed.
   --review-status [REVIEW_STATUS [REVIEW_STATUS ...]]
                         Filter results by review statuses. Valid values are:
                         confirmed, false_positive, intentional, suppress,
                         unreviewed (default: ['confirmed', 'unreviewed'])
-  --verbose {info,debug,debug_analyzer}
+  --verbose {info,debug_analyzer,debug}
                         Set verbosity level.
 
 export arguments:
-  -e {html,json,codeclimate}, --export {html,json,codeclimate}
+  -e {html,json,codeclimate,gerrit}, --export {html,json,codeclimate,gerrit}
                         Specify extra output format type.
                         'codeclimate' format can be used for Code Climate and
                         for GitLab integration. For more information see:
@@ -1529,15 +1586,20 @@ export arguments:
                         ec/analyzers/SPEC.md#data-types (default: None)
   -o OUTPUT_PATH, --output OUTPUT_PATH
                         Store the output in the given folder.
-  -c, --clean           DEPRECATED. Delete output results stored in the output
-                        directory. (By default, it would keep output files and
-                        overwrites only those that belongs to a plist file
-                        given by the input argument. (default: True)
 
-environment variables:
+Environment variables
+------------------------------------------------
   CC_SEVERITY_MAP_FILE   Path of the checker-severity mapping config file.
+  CC_REPO_DIR         Root directory of the sources, i.e. the directory where
+                      the repository was cloned. Use it when generating gerrit
+                      output.
+  CC_REPORT_URL       URL where the report can be found. Use it when generating
+                      gerrit output.
+  CC_CHANGED_FILES    Path of changed files json from Gerrit. Use it when
+                      generating gerrit output.
                          Default: <package>/config/checker_severity_map.json
 ```
+</details>
 
 For example, if the analysis was run like:
 
@@ -1558,6 +1620,11 @@ For example there is a ClangTidy checker which suggests using
 `collection.empty()` instead of `collection.size() != 0` expression. These
 simple changes can be applied directy in the source code. `CodeChecker fixit`
 command handles these automatic fixes.
+
+<details>
+  <summary>
+    <i>$ <b>CodeChecker fixit --help</b> (click to expand)</i>
+  </summary>
 
 ```
 usage: CodeChecker fixit [-h] [-l]
@@ -1598,6 +1665,7 @@ optional arguments:
   --verbose {info,debug,debug_analyzer}
                         Set verbosity level.
 ```
+</details>
 
 ## `checkers`<a name="checkers"></a>
 
@@ -1606,6 +1674,11 @@ performing an analysis.
 
 By default, `CodeChecker checkers` will list all checkers, one per each row,
 providing a quick overview on which checkers are available in the analyzers.
+
+<details>
+  <summary>
+    <i>$ <b>CodeChecker checkers --help</b> (click to expand)</i>
+  </summary>
 
 ```
 usage: CodeChecker checkers [-h] [--analyzers ANALYZER [ANALYZER ...]]
@@ -1650,7 +1723,8 @@ optional arguments:
 The list of checkers that are enabled of disabled by default can be edited by
 editing the file '.../config/checker_profile_map.json'.
 
-environment variables:
+Environment variables
+------------------------------------------------
   CC_SEVERITY_MAP_FILE   Path of the checker-severity mapping config file.
                          Default: '<package>/config/checker_severity_map.json'
   CC_GUIDELINE_MAP_FILE  Path of the checker-guideline mapping config file.
@@ -1658,6 +1732,7 @@ environment variables:
   CC_PROFILE_MAP_FILE    Path of the checker-profile mapping config file.
                          Default: '<package>/config/checker_profile_map.json'
 ```
+</details>
 
 The list provided by default is formatted for easy machine and human
 reading. Use the `--only-` options (`--only-enabled` and `--only-disabled`) to
@@ -1692,10 +1767,17 @@ information.
 By default, this command only lists the names of the available analyzers (with
 respect to the environment CodeChecker is run in).
 
+<details>
+  <summary>
+    <i>$ <b>CodeChecker analyzers --help</b> (click to expand)</i>
+  </summary>
+
 ```
 usage: CodeChecker analyzers [-h] [--all] [--details]
+                             [--dump-config {clang-tidy,clangsa}]
+                             [--analyzer-config {clang-tidy,clangsa}]
                              [-o {rows,table,csv,json}]
-                             [--verbose {info,debug,debug_analyzer}]
+                             [--verbose {info,debug_analyzer,debug}]
 
 Get the list of available and supported analyzers, querying their version and
 actual binary executed.
@@ -1706,7 +1788,7 @@ optional arguments:
                         ones.
   --details             Show details about the analyzers, not just their
                         names.
-  --dump-config {clangsa,clang-tidy}
+  --dump-config {clang-tidy,clangsa}
                         Dump the available checker options for the given
                         analyzer to the standard output. Currently only clang-
                         tidy supports this option. The output can be
@@ -1714,12 +1796,17 @@ optional arguments:
                         is placed to the project directory then the options
                         are applied to the files under that directory. This
                         config file can also be provided via 'CodeChecker
-                        analyze' and 'CodeChecker check' commands.
+                        analyze' and 'CodeChecker check' commands. (default:
+                        None)
+  --analyzer-config {clang-tidy,clangsa}
+                        Show analyzer configuration options. These can be
+                        given to 'CodeChecker analyze --analyzer-config'.
   -o {rows,table,csv,json}, --output {rows,table,csv,json}
                         Specify the format of the output list. (default: rows)
-  --verbose {info,debug,debug_analyzer}
+  --verbose {info,debug_analyzer,debug}
                         Set verbosity level.
 ```
+</details>
 
 A detailed view of the available analyzers is available via `--details`. In the
 *detailed view*, version string and install path is also printed.

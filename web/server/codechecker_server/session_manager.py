@@ -14,6 +14,7 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import re
 import uuid
 
 from codechecker_common.logger import get_logger
@@ -179,6 +180,7 @@ class SessionManager(object):
         self.__worker_processes = get_worker_processes(scfg_dict)
         self.__max_run_count = scfg_dict.get('max_run_count', None)
         self.__store_config = scfg_dict.get('store', {})
+        self.__keepalive_config = scfg_dict.get('keepalive', {})
         self.__auth_config = scfg_dict['authentication']
 
         if force_auth:
@@ -194,6 +196,20 @@ class SessionManager(object):
 
         # Save the root SHA into the configuration (but only in memory!)
         self.__auth_config['method_root'] = root_sha
+
+        self.__regex_groups_enabled = False
+
+        # Pre-compile the regular expressions of 'regex_groups'
+        if 'regex_groups' in self.__auth_config:
+            self.__regex_groups_enabled = self.__auth_config['regex_groups'] \
+                                              .get('enabled', False)
+
+            regex_groups = self.__auth_config['regex_groups'] \
+                               .get('groups', [])
+            d = dict()
+            for group_name, regex_list in regex_groups.items():
+                d[group_name] = [re.compile(r) for r in regex_list]
+            self.__group_regexes_compiled = d
 
         # If no methods are configured as enabled, disable authentication.
         if scfg_dict['authentication'].get('enabled'):
@@ -333,23 +349,22 @@ class SessionManager(object):
 
         This validation object contains two keys: username and groups.
         """
-        validation = self.__try_auth_root(auth_string)
-        if validation:
-            return validation
+        validation = self.__try_auth_root(auth_string) \
+            or self.__try_auth_dictionary(auth_string) \
+            or self.__try_auth_pam(auth_string) \
+            or self.__try_auth_ldap(auth_string)
+        if not validation:
+            return False
 
-        validation = self.__try_auth_dictionary(auth_string)
-        if validation:
-            return validation
+        # If a validation method is enabled and regex_groups is enabled too,
+        # we will extend the 'groups'.
+        extra_groups = self.__try_regex_groups(validation['username'])
+        if extra_groups:
+            already_groups = set(validation['groups'])
+            validation['groups'] = list(already_groups | extra_groups)
 
-        validation = self.__try_auth_pam(auth_string)
-        if validation:
-            return validation
-
-        validation = self.__try_auth_ldap(auth_string)
-        if validation:
-            return validation
-
-        return False
+        LOG.debug('User validation details: %s', str(validation))
+        return validation
 
     def __is_method_enabled(self, method):
         return method not in UNSUPPORTED_METHODS and \
@@ -479,6 +494,23 @@ class SessionManager(object):
                 transaction.close()
 
         return False
+
+    def __try_regex_groups(self, username):
+        """
+        Return a set of groups that the user belongs to, depending on whether
+        the username matches the regular expression of the group.
+
+        """
+        if not self.__regex_groups_enabled:
+            return set()
+
+        matching_groups = set()
+        for group_name, regex_list in self.__group_regexes_compiled.items():
+            for r in regex_list:
+                if re.search(r, username):
+                    matching_groups.add(group_name)
+
+        return matching_groups
 
     @staticmethod
     def get_user_name(auth_string):
@@ -625,6 +657,25 @@ class SessionManager(object):
         """
         limit = self.__store_config.get('limit', {})
         return limit.get('compilation_database_size')
+
+    def is_keepalive_enabled(self):
+        """
+        True if the keepalive functionality is explicitly enabled, otherwise it
+        will return False.
+        """
+        return self.__keepalive_config.get('enabled')
+
+    def get_keepalive_idle(self):
+        """ Get keepalive idle time. """
+        return self.__keepalive_config.get('idle')
+
+    def get_keepalive_interval(self):
+        """ Get keepalive interval time. """
+        return self.__keepalive_config.get('interval')
+
+    def get_keepalive_max_probe(self):
+        """ Get keepalive max probe count. """
+        return self.__keepalive_config.get('max_probe')
 
     def __get_local_session_from_db(self, token):
         """

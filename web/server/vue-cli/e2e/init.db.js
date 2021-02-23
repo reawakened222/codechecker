@@ -9,6 +9,7 @@ const url = `http://${host}:${port}`;
 const CC_DIR = path.join(__dirname, "__codechecker");
 const REPORTS_DIR = path.join(CC_DIR, "reports");
 const PASSWORD_FILE = path.join(CC_DIR, "codechecker.passwords.json");
+const SESSION_FILE = path.join(CC_DIR, "codechecker.session.json");
 
 // List of products which will be added to the server.
 const PRODUCTS = [
@@ -34,13 +35,14 @@ const RUNS = [
     url: `http://${host}:${port}/e2e`,
     description: "This is my simple run."
   },
-  {
+  // We store this run so many times to test the run history load more feature.
+  ...[ ...Array(10).keys() ].map(idx => ({
     name: "simple",
     output: path.join(REPORTS_DIR, "simple"),
     url: `http://${host}:${port}/e2e`,
-    tag: "v0.0.2",
+    tag: `v0.0.${idx}`,
     description: "This is my updated run."
-  },
+  })),
   {
     name: "duplicated",
     output: path.join(REPORTS_DIR, "simple"),
@@ -61,6 +63,17 @@ const RUNS = [
   }
 ];
 
+function runCommand(cmd) {
+  execSync(cmd, {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      "CC_PASS_FILE": PASSWORD_FILE,
+      "CC_SESSION_FILE": SESSION_FILE
+    }
+  });
+}
+
 async function login (username) {
   const cmd = [
     "CodeChecker", "cmd", "login", username,
@@ -69,13 +82,7 @@ async function login (username) {
 
   console.log("Login command: ", cmd);
 
-  execSync(cmd, {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      "CC_PASS_FILE": PASSWORD_FILE
-    }
-  });
+  runCommand(cmd);
 }
 
 function logout() {
@@ -86,7 +93,7 @@ function logout() {
 
   console.log("Logout command: ", cmd);
 
-  execSync(cmd, { stdio: "inherit" });
+  runCommand(cmd);
 }
 
 function addProduct({ endpoint, name, description }) {
@@ -100,7 +107,7 @@ function addProduct({ endpoint, name, description }) {
 
   console.log("Add product command: ", cmd);
 
-  execSync(cmd, { stdio: "inherit" });
+  runCommand(cmd);
 }
 
 function store({ name, output, tag, description, url }) {
@@ -121,7 +128,7 @@ function store({ name, output, tag, description, url }) {
 
   console.log("Store command: ", cmd);
 
-  execSync(cmd, { stdio: "inherit" });
+  runCommand(cmd);
 }
 
 login("root");

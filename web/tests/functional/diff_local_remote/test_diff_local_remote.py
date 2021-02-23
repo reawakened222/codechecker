@@ -52,9 +52,13 @@ class LocalRemote(unittest.TestCase):
 
         self._local_test_project = \
             self._test_cfg['test_project']['project_path_local']
+        self._remote_test_project = \
+            self._test_cfg['test_project']['project_path_remote']
 
         self._local_reports = os.path.join(self._local_test_project,
                                            'reports')
+        self._remote_reports = os.path.join(self._remote_test_project,
+                                            'reports')
 
         self._url = env.parts_to_url(self._test_cfg['codechecker_cfg'])
 
@@ -64,8 +68,6 @@ class LocalRemote(unittest.TestCase):
         """ Runs the given command and returns the output. """
         if not r_env:
             r_env = self._env
-
-        diff_cmd.extend(["--verbose", "debug"])
 
         print(diff_cmd)
         try:
@@ -103,16 +105,17 @@ class LocalRemote(unittest.TestCase):
             diff_cmd.extend(extra_args)
 
         print(diff_cmd)
-        out = subprocess.check_output(
-            diff_cmd,
-            env=self._env,
-            cwd=os.environ['TEST_WORKSPACE'],
-            encoding="utf-8",
-            errors="ignore")
-        print(out)
+        try:
+            out = subprocess.check_output(
+                diff_cmd,
+                env=self._env,
+                cwd=os.environ['TEST_WORKSPACE'],
+                encoding="utf-8",
+                errors="ignore")
+        except subprocess.CalledProcessError as cerr:
+            print(cerr.output)
 
         out = self.run_cmd(diff_cmd)
-
         return out
 
     def test_local_to_remote_compare_count_new(self):
@@ -215,15 +218,15 @@ class LocalRemote(unittest.TestCase):
 
         res = self.get_local_remote_diff(['--severity', 'high'])
         self.assertEqual(len(re.findall(r'\[LOW\]', res)), 0)
-        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 15)
+        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 18)
 
         res = self.get_local_remote_diff(['--severity', 'high', 'low'])
         self.assertEqual(len(re.findall(r'\[LOW\]', res)), 6)
-        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 15)
+        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 18)
 
         res = self.get_local_remote_diff()
         self.assertEqual(len(re.findall(r'\[LOW\]', res)), 6)
-        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 15)
+        self.assertEqual(len(re.findall(r'\[HIGH\]', res)), 18)
 
     def test_local_cmp_filter_unres_filepath(self):
         """Filter unresolved results by file path."""
@@ -365,7 +368,10 @@ class LocalRemote(unittest.TestCase):
                 errors="ignore")
 
     def test_diff_gerrit_output(self):
-        """ Test gerrit output. """
+        """Test gerrit output.
+
+        Every report should be in the gerrit review json.
+        """
         base_run_name = self._run_names[0]
 
         export_dir = os.path.join(self._local_reports, "export_dir1")
@@ -411,8 +417,53 @@ class LocalRemote(unittest.TestCase):
 
         shutil.rmtree(export_dir)
 
+    def test_diff_gerrit_stdout(self):
+        """Test gerrit stdout output.
+
+        Only one output format was selected
+        the gerrit review json should be printed to stdout.
+        """
+        base_run_name = self._run_names[0]
+
+        diff_cmd = [self._codechecker_cmd, "cmd", "diff",
+                    "--new",
+                    "--url", self._url,
+                    "-b", base_run_name,
+                    "-n", self._local_reports,
+                    "-o", "gerrit"]
+
+        review_data = self.run_cmd(diff_cmd)
+        print(review_data)
+        review_data = json.loads(review_data)
+        lbls = review_data["labels"]
+        self.assertEqual(lbls["Verified"], -1)
+        self.assertEqual(lbls["Code-Review"], -1)
+        self.assertEqual(review_data["message"],
+                         "CodeChecker found 4 issue(s) in the code.")
+        self.assertEqual(review_data["tag"], "jenkins")
+
+        comments = review_data["comments"]
+        self.assertEqual(len(comments), 1)
+
+        file_path = next(iter(comments))
+        reports = comments[file_path]
+        self.assertEqual(len(reports), 4)
+        for report in reports:
+            self.assertIn("message", report)
+
+            self.assertIn("range", report)
+            range = report["range"]
+            self.assertIn("start_line", range)
+            self.assertIn("start_character", range)
+            self.assertIn("end_line", range)
+            self.assertIn("end_character", range)
+
     def test_set_env_diff_gerrit_output(self):
-        """ Test gerrit output when using diff and set env vars. """
+        """Test gerrit output when using diff and set env vars.
+
+        Only the reports which belong to the changed files should
+        be in the gerrit review json.
+        """
         base_run_name = self._run_names[0]
 
         export_dir = os.path.join(self._local_reports, "export_dir2")
@@ -444,7 +495,6 @@ class LocalRemote(unittest.TestCase):
             changed_file.write(json.dumps(changed_files))
 
         env["CC_CHANGED_FILES"] = changed_file_path
-
         self.run_cmd(diff_cmd, env)
         gerrit_review_file = os.path.join(export_dir, 'gerrit_review.json')
         self.assertTrue(os.path.exists(gerrit_review_file))
@@ -461,7 +511,7 @@ class LocalRemote(unittest.TestCase):
                          "See: '{0}'".format(report_url))
         self.assertEqual(review_data["tag"], "jenkins")
 
-        # Because the CC_CHANGED_FILES is set we will se reports only for
+        # Because the CC_CHANGED_FILES is set we will see reports only for
         # the divide_zero.cpp function.
         comments = review_data["comments"]
         self.assertEqual(len(comments), 1)
@@ -553,3 +603,15 @@ class LocalRemote(unittest.TestCase):
         self.assertTrue(os.path.exists(index_html))
 
         shutil.rmtree(export_dir)
+
+    def test_diff_remote_local_resolved_same(self):
+        """ Test for resolved reports on same list remotely and locally. """
+        diff_cmd = [self._codechecker_cmd, "cmd", "diff",
+                    "--resolved",
+                    "--url", self._url,
+                    "-b", self._run_names[0],
+                    "-n", self._remote_reports,
+                    "-o", "json"]
+
+        out = self.run_cmd(diff_cmd)
+        self.assertEqual(json.loads(out), [])

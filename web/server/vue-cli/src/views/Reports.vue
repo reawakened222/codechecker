@@ -111,11 +111,14 @@
             :to="{ name: 'report-detail', query: {
               ...$router.currentRoute.query,
               'report-id': item.reportId ? item.reportId : undefined,
-              'report-hash': item.reportId ? undefined : item.bugHash
+              'report-hash': item.bugHash,
+              'report-filepath': reportFilter.isUnique
+                ? `*${item.checkedFile}` : item.checkedFile
             }}"
             class="file-name"
           >
-            {{ item.checkedFile }} @&nbsp;Line&nbsp;{{ item.line }}
+            {{ item.checkedFile }}
+            <span v-if="item.line">@&nbsp;Line&nbsp;{{ item.line }}</span>
           </router-link>
         </template>
 

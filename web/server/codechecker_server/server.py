@@ -319,31 +319,37 @@ class RequestHandler(SimpleHTTPRequestHandler):
         """
         Handles POST queries, which are usually Thrift messages.
         """
+        protocol_factory = TJSONProtocol.TJSONProtocolFactory()
+        input_protocol_factory = protocol_factory
+        output_protocol_factory = protocol_factory
+
+        # Get Thrift API function name to print to the log output.
+        itrans = TTransport.TFileObjectTransport(self.rfile)
+        itrans = TTransport.TBufferedTransport(itrans,
+                                               int(self.headers[
+                                                   'Content-Length']))
+        iprot = input_protocol_factory.getProtocol(itrans)
+        fname, _, _ = iprot.readMessageBegin()
+
         client_host, client_port, is_ipv6 = \
             RequestHandler._get_client_host_port(self.client_address)
         self.auth_session = self.__check_session_cookie()
-        LOG.info("%s:%s -- [%s] POST %s",
+        LOG.info("%s:%s -- [%s] POST %s@%s",
                  client_host if not is_ipv6 else '[' + client_host + ']',
                  client_port,
                  self.auth_session.user if self.auth_session else "Anonymous",
-                 self.path)
+                 self.path, fname)
 
         # Create new thrift handler.
         checker_md_docs = self.server.checker_md_docs
         checker_md_docs_map = self.server.checker_md_docs_map
         version = self.server.version
 
-        protocol_factory = TJSONProtocol.TJSONProtocolFactory()
-        input_protocol_factory = protocol_factory
-        output_protocol_factory = protocol_factory
-
-        itrans = TTransport.TFileObjectTransport(self.rfile)
-        itrans = TTransport.TBufferedTransport(itrans,
-                                               int(self.headers[
-                                                   'Content-Length']))
-        otrans = TTransport.TMemoryBuffer()
-
+        cstringio_buf = itrans.cstringio_buf.getvalue()
+        itrans = TTransport.TMemoryBuffer(cstringio_buf)
         iprot = input_protocol_factory.getProtocol(itrans)
+
+        otrans = TTransport.TMemoryBuffer()
         oprot = output_protocol_factory.getProtocol(otrans)
 
         if self.server.manager.is_enabled and \
@@ -736,6 +742,9 @@ class CCSimpleHttpServer(HTTPServer):
                                 bind_and_activate=True)
             ssl_key_file = os.path.join(config_directory, "key.pem")
             ssl_cert_file = os.path.join(config_directory, "cert.pem")
+
+            self.configure_keepalive()
+
             if os.path.isfile(ssl_key_file) and os.path.isfile(ssl_cert_file):
                 LOG.info("Initiating SSL. Server listening on secure socket.")
                 LOG.debug("Using cert file: %s", ssl_cert_file)
@@ -752,6 +761,47 @@ class CCSimpleHttpServer(HTTPServer):
         except Exception as e:
             LOG.error("Couldn't start the server: %s", e.__str__())
             raise
+
+    def configure_keepalive(self):
+        """
+        Enable keepalive on the socket and some TCP keepalive configuration
+        option based on the server configuration file.
+        """
+        if not self.manager.is_keepalive_enabled():
+            return
+
+        keepalive_is_on = self.socket.getsockopt(socket.SOL_SOCKET,
+                                                 socket.SO_KEEPALIVE)
+        if keepalive_is_on != 0:
+            LOG.debug('Socket keepalive already on.')
+        else:
+            LOG.debug('Socket keepalive off, turning on.')
+
+        ret = self.socket.setsockopt(socket.SOL_SOCKET,
+                                     socket.SO_KEEPALIVE, 1)
+        if ret:
+            LOG.error('Failed to set socket keepalive: %s', ret)
+
+        idle = self.manager.get_keepalive_idle()
+        if idle:
+            ret = self.socket.setsockopt(socket.IPPROTO_TCP,
+                                         socket.TCP_KEEPIDLE, idle)
+            if ret:
+                LOG.error('Failed to set TCP keepalive idle: %s', ret)
+
+        interval = self.manager.get_keepalive_interval()
+        if interval:
+            ret = self.socket.setsockopt(socket.IPPROTO_TCP,
+                                         socket.TCP_KEEPINTVL, interval)
+            if ret:
+                LOG.error('Failed to set TCP keepalive interval: %s', ret)
+
+        max_probe = self.manager.get_keepalive_max_probe()
+        if max_probe:
+            ret = self.socket.setsockopt(socket.IPPROTO_TCP,
+                                         socket.TCP_KEEPCNT, max_probe)
+            if ret:
+                LOG.error('Failed to set TCP max keepalive probe: %s', ret)
 
     def terminate(self):
         """

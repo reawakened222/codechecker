@@ -116,6 +116,7 @@ IGNORED_OPTIONS_GCC = [
     '-mno-fp-ret-in-387',
     '-mpreferred-stack-boundary',
     '-mpcrel-func-addr',
+    '-mrecord-mcount$',
     '-maccumulate-outgoing-args',
     '-mcall-aixdesc',
     '-mppa3-addr-bug',
@@ -128,6 +129,7 @@ IGNORED_OPTIONS_GCC = [
     '-mfix-cortex-m3-ldrd$',
     '-mmultiple$',
     '-msahf$',
+    '-mskip-rax-setup$',
     '-mthumb-interwork$',
     '-mupdate$',
 
@@ -960,7 +962,7 @@ def parse_options(compilation_db_entry,
         'output': '',
         'lang': None,
         'arch': '',  # Target in the compile command set by -arch.
-        'target': defaultdict(dict),
+        'target': defaultdict(str),
         'source': ''}
 
     if 'arguments' in compilation_db_entry:

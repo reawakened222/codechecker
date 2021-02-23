@@ -11,6 +11,18 @@
             class="pa-0 mr-2"
             align-self="center"
           >
+            <show-report-info-dialog :value="report">
+              <template v-slot="{ on }">
+                <report-info-button :on="on" />
+              </template>
+            </show-report-info-dialog>
+          </v-col>
+
+          <v-col
+            cols="auto"
+            class="pa-0 mr-2"
+            align-self="center"
+          >
             <show-documentation-button
               :value="checkerId"
             />
@@ -132,6 +144,8 @@
                 class="file-path py-0"
                 align-self="center"
               >
+                <copy-btn v-if="sourceFile" :value="sourceFile.filePath" />
+
                 <span
                   v-if="sourceFile"
                   class="file-path"
@@ -189,6 +203,20 @@
 import Vue from "vue";
 
 import CodeMirror from "codemirror";
+import "codemirror/lib/codemirror.css";
+import "codemirror/mode/clike/clike.js";
+
+// Import libaries for code highlights.
+import "codemirror/addon/scroll/annotatescrollbar.js";
+import "codemirror/addon/search/match-highlighter.js";
+import "codemirror/addon/search/matchesonscrollbar.js";
+
+// Import libaries to support code search.
+import "codemirror/addon/dialog/dialog.js";
+import "codemirror/addon/dialog/dialog.css";
+import "codemirror/addon/search/search.js";
+import "codemirror/addon/search/searchcursor.js";
+
 import { jsPlumb } from "jsplumb";
 
 import { format } from "date-fns";
@@ -203,6 +231,7 @@ import {
 import { mapGetters } from "vuex";
 
 import { FillHeight } from "@/directives";
+import CopyBtn from "@/components/CopyBtn";
 import { UserIcon } from "@/components/Icons";
 
 import ReportTreeKind from "@/components/Report/ReportTree/ReportTreeKind";
@@ -211,6 +240,7 @@ import { ReportComments } from "./Comment";
 import SelectReviewStatus from "./SelectReviewStatus";
 import SelectSameReport from "./SelectSameReport";
 import ShowDocumentationButton from "./ShowDocumentationButton";
+import { ReportInfoButton, ShowReportInfoDialog } from "./ReportInfo";
 
 import ReportStepMessage from "./ReportStepMessage";
 const ReportStepMessageClass = Vue.extend(ReportStepMessage);
@@ -219,10 +249,13 @@ const ReportStepMessageClass = Vue.extend(ReportStepMessage);
 export default {
   name: "Report",
   components: {
+    CopyBtn,
     ReportComments,
+    ReportInfoButton,
     SelectReviewStatus,
     SelectSameReport,
     ShowDocumentationButton,
+    ShowReportInfoDialog,
     UserIcon
   },
   directives: { FillHeight },
@@ -297,6 +330,14 @@ export default {
     }
   },
 
+  created() {
+    document.addEventListener("keydown", this.findText);
+  },
+
+  destoryed() {
+    document.removeEventListener("keydown", this.findText);
+  },
+
   mounted() {
     this.editor = CodeMirror.fromTextArea(this.$refs.editor, {
       lineNumbers: true,
@@ -304,7 +345,8 @@ export default {
       mode: "text/x-c++src",
       gutters: [ "CodeMirror-linenumbers", "bugInfo" ],
       extraKeys: {},
-      viewportMargin: 500
+      viewportMargin: 500,
+      highlightSelectionMatches : { showToken: /\w/, annotateScrollbar: true }
     });
     this.editor.setSize("100%", "100%");
 
@@ -386,6 +428,27 @@ export default {
       this.jumpTo(report.line.toNumber(), 0);
       this.highlightReport(report);
       this.loading = false;
+    },
+
+    findText(evt) {
+      if (evt.ctrlKey && evt.keyCode === 13) // Enter
+        this.editor.execCommand("findPersistentNext");
+
+      if (evt.ctrlKey && evt.keyCode === 70) { // Ctrl-f
+        evt.preventDefault();
+        evt.stopPropagation();
+
+        this.editor.execCommand("findPersistent");
+
+        // Set focus to the search input field.
+        setTimeout(() => {
+          const searchField =
+            document.getElementsByClassName("CodeMirror-search-field");
+
+          if (searchField.length)
+            searchField[0].focus();
+        }, 0);
+      }
     },
 
     highlightReportStep(stepId) {
@@ -708,6 +771,14 @@ export default {
   .editor {
     font-size: initial;
     line-height: initial;
+
+    ::v-deep .cm-matchhighlight:not(.cm-searching) {
+      background-color: lightgreen;
+    }
+
+    ::v-deep .CodeMirror-selection-highlight-scrollbar {
+      background-color: green;
+    }
   }
 }
 

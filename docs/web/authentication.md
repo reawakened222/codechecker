@@ -15,6 +15,7 @@ Table of Contents
         * [<i>PAM</i> authentication](#pam-authentication)
         * [<i>LDAP</i> authentication](#ldap-authentication)
             * [Configuration options](#configuration-options)
+    * Membership in custom groups with [<i>regex_groups</i>](#regex_groups-authentication)
 * [Client-side configuration](#client-side-configuration)
     * [Web-browser client](#web-browser-client)
     * [Command-line client](#command-line-client)
@@ -182,6 +183,11 @@ servers as it can elongate the authentication process.
    URL of the LDAP server which will be queried for user information and group
    membership.
 
+ * `tls_require_cert`
+
+   If set to `never`, skip verification of certificate in LDAPS connections
+   (!!! INSECURE !!!).
+
  * `username`
 
    Optional username for LDAP bind, if not set bind with the login credentials
@@ -219,6 +225,17 @@ servers as it can elongate the authentication process.
 
    Example configuration: `(&(objectClass=person)(sAMAccountName=$USN$))`
 
+ * `user_dn_postfix_preference`
+
+    User DN postfix preference value can be used to select out one prefered
+    user DN if multiple DN entries are found by the LDAP search.
+    The configured value will be matched and the first matching will be used.
+    If only one DN was found this postfix matching will not be used.
+    If not set and multiple values are found the first value
+    in the search result list will be used.
+
+   Example configuration: `OU=people,DC=example,DC=com`
+
  * `groupBase`
 
    Root tree containing all the groups.
@@ -250,13 +267,15 @@ servers as it can elongate the authentication process.
       "accountBase" : null,
       "accountScope" : "subtree",
       "accountPattern" : "(&(objectClass=person)(sAMAccountName=$USN$))",
+      "user_dn_postfix_preference": null,
       "groupBase" : null,
       "groupScope" : "subtree",
       "groupPattern" : "(&(objectClass=group)(member=$USERDN$))",
       "groupNameAttr" : "sAMAccountName"
     },
     {
-      "connection_url" : "ldaps://secure.internal.example.org:636",
+      "connection_url"   : "ldaps://secure.internal.example.org:636",
+      "tls_require_cert" : null,
       "username" : null,
       "password" : null,
       "referrals" : false,
@@ -272,6 +291,32 @@ servers as it can elongate the authentication process.
   ]
 }
 ~~~
+
+## Membership in custom groups with <a name="regex_groups-authentication">regex_groups</a>
+
+Many regular expressions can be listed to define a group. Please note that the
+regular expressions are searched in the whole username string, so they should
+be properly anchored if you want to match only in the beginning or in the
+end. Regular expression matching follows the rules of Python's
+[re.search()](https://docs.python.org/3/library/re.html).
+
+The following example will create a group named `everybody` that contains
+every user regardless of the authentication method, and a group named `admins`
+that contains the user `admin` and all usernames starting with `admin_` or
+ending with `_admin`.
+
+~~~{.json}
+"regex_groups": {
+  "enabled" : true,
+  "groups" : {
+      "everybody" : [ ".*" ],
+      "admins"    : [ "^admin$", "^admin_", "_admin$" ]
+  }
+}
+~~~
+
+When we manage permissions on the GUI we can give permission to these
+groups. For more information [see](permissions.md#managing-permissions).
 
 ----
 
@@ -297,6 +342,11 @@ by using the package's `config/session_client.json` as an example.
 > access this file. Executing `chmod 0600 ~/.codechecker.passwords.json` will
 > limit access to your user only.
 
+<details>
+  <summary>
+    <i>$ <b>CodeChecker cmd login --help</b> (click to expand)</i>
+  </summary>
+
 ```
 usage: CodeChecker cmd login [-h] [-d] [--url SERVER_URL]
                              [--verbose {info,debug,debug_analyzer}]
@@ -320,6 +370,7 @@ common arguments:
   --verbose {info,debug,debug_analyzer}
                         Set verbosity level.
 ```
+</details>
 
 The user can log in onto the server by issuing the command `CodeChecker cmd
 login <username>`. After receiving an *Authentication successful!* message,
@@ -372,6 +423,11 @@ The location of the password file can be configured by the `CC_PASS_FILE`
 environment variable. This environment variable can also be used to setup
 different credential files to login to the same server with a different user.
 
+Furthermore, the location of the session file can be configured by the
+`CC_SESSION_FILE` environment variable. This can be useful if CodeChecker does
+not have the permission to create a session file under the user's home
+directory (e.g. in some CI environments).
+
 ### Automatic login <a name="automatic-login"></a>
 
 If authentication is required by the server and the user hasn't logged in but
@@ -407,6 +463,11 @@ Personal tokens can be written instead of the user's password in the
 ```
 
 ## New personal access token <a name="new-personal-access-token"></a>
+<details>
+  <summary>
+    <i>$ <b>CodeChecker cmd token new --help</b> (click to expand)</i>
+  </summary>
+
 ```
 usage: CodeChecker cmd token new [-h] [--description DESCRIPTION]
                                  [--url SERVER_URL]
@@ -420,8 +481,13 @@ optional arguments:
                         A custom textual description to be shown alongside the
                         token.
 ```
+</details>
 
 ## List personal access tokens <a name="list-personal-access-token"></a>
+<details>
+  <summary>
+    <i>$ <b>CodeChecker cmd token list --help</b> (click to expand)</i>
+  </summary>
 
 ```
 usage: CodeChecker cmd token list [-h] [--url SERVER_URL]
@@ -434,8 +500,14 @@ List the available personal access tokens.
 optional arguments:
   -h, --help            show this help message and exit
 ```
+</details>
 
 ## Remove personal access token <a name="remove-personal-access-token"></a>
+<details>
+  <summary>
+    <i>$ <b>CodeChecker cmd token del --help</b> (click to expand)</i>
+  </summary>
+
 ```
 usage: CodeChecker cmd token del [-h] [--url SERVER_URL]
                                  [--verbose {info,debug,debug_analyzer}]
@@ -446,3 +518,4 @@ Removes the specified access token.
 positional arguments:
   TOKEN                 Personal access token which will be deleted.
 ```
+</details>

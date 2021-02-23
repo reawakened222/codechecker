@@ -18,6 +18,7 @@ In the configuration `null` means it is not configured.
   "authorities": [
     {
       "connection_url" : null,
+      "tls_require_cert" : null,
       "username" : null,
       "password" : null,
       "referrals" : false,
@@ -132,29 +133,53 @@ def ldap_error_handler():
     except ldap.FILTER_ERROR as ex:
         LOG.error("Filter error: %s", str(ex))
 
+    except ldap.SERVER_DOWN:
+        LOG.error("Can't connect to LDAP server,"
+                  " or LDAPS certificate verification failed")
+
     except ldap.LDAPError as err:
-        LOG.error("LDAP Error: %s", str(err))
+        LOG.error("Exception ldap.%s (%s)",
+                  type(err).__name__, str(err))
 
 
 def get_user_dn(con,
                 account_base_dn,
                 account_pattern,
-                scope=ldap.SCOPE_SUBTREE):
+                scope=ldap.SCOPE_SUBTREE,
+                user_dn_postfix_preference=None):
     """
     Search for the user dn based on the account pattern.
     Return the full user dn None if search failed.
+
+    Parameters:
+      user_dn_postfix_preference: User DN postfix preference value can
+      be used to select out one prefered
+      user DN if multiple DN entries are found by the LDAP search.
+      The configured value will be matched and the first matching will be used.
+      If only one DN was found this postfix matching will not be used.
+      If not set and multiple values are found the first value
+      in the search result list will be used.
     """
 
     with ldap_error_handler():
         # Attribute values MAY contain any type of data. Before you use a
         # value, call 'bytes_to_str' helper function to convert it to text.
         user_data = con.search_s(account_base_dn, scope, account_pattern)
-
+        user_dns = []
         if user_data:
             # User found use the user DN from the first result.
-            user_dn = bytes_to_str(user_data[0][0])
-            LOG.debug("Found user: %s", user_dn)
-            return user_dn
+            for user_info in user_data:
+                user_dns.append(bytes_to_str(user_info[0]))
+            LOG.debug("Found user dns: %s", ', '.join(user_dns))
+
+            if len(user_dns) > 1 and user_dn_postfix_preference:
+                for user_dn in user_dns:
+                    if user_dn.endswith(user_dn_postfix_preference):
+                        LOG.debug("Selected user dn: %s", user_dn)
+                        return user_dn
+            elif len(user_dns) > 0:
+                LOG.debug("Selected user dn: %s", user_dns[0])
+                return user_dns[0]
 
     LOG.debug("Searching for user failed with pattern: %s", account_pattern)
     LOG.debug("Account base DN: %s", account_base_dn)
@@ -205,8 +230,8 @@ class LDAPConnection(object):
             self.connection = None
             return
 
-        referals = ldap_config.get('referals', False)
-        ldap.set_option(ldap.OPT_REFERRALS, 1 if referals else 0)
+        referrals = ldap_config.get('referrals', False)
+        ldap.set_option(ldap.OPT_REFERRALS, 1 if referrals else 0)
 
         deref = ldap_config.get('deref', ldap.DEREF_ALWAYS)
         if deref == 'never':
@@ -218,8 +243,12 @@ class LDAPConnection(object):
 
         ldap.protocol_version = ldap.VERSION3
 
-        # Check cert if available but do not fail if not.
-        ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_ALLOW)
+        # Verify certificate in LDAPS connections
+        tls_require_cert = ldap_config.get('tls_require_cert', '')
+        if tls_require_cert.lower() == 'never':
+            LOG.debug("Insecure LDAPS connection because of "
+                      "tls_require_cert=='never'")
+            ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 
         self.connection = ldap.initialize(ldap_server, bytes_mode=False)
 
@@ -316,6 +345,9 @@ def auth_user(ldap_config, username=None, credentials=None):
         service_cred = credentials
 
     LOG.debug("Creating SERVICE connection...")
+
+    user_dn_postfix_preference = ldap_config.get('user_dn_postfix_preference')
+
     with LDAPConnection(ldap_config, service_user, service_cred) as connection:
         if connection is None:
             LOG.error('Please check your LDAP server '
@@ -326,7 +358,8 @@ def auth_user(ldap_config, username=None, credentials=None):
         user_dn = get_user_dn(connection,
                               account_base,
                               account_pattern,
-                              account_scope)
+                              account_scope,
+                              user_dn_postfix_preference)
 
         if user_dn is None:
             LOG.warning("DN lookup failed for user name: '%s'!", username)
@@ -371,6 +404,8 @@ def get_groups(ldap_config, username, credentials):
         service_user = username
         service_cred = credentials
 
+    user_dn_postfix_preference = ldap_config.get('user_dn_postfix_preference')
+
     LOG.debug("creating LDAP connection. service user %s", service_user)
     with LDAPConnection(ldap_config, service_user, service_cred) as connection:
         if connection is None:
@@ -381,15 +416,18 @@ def get_groups(ldap_config, username, credentials):
         user_dn = get_user_dn(connection,
                               account_base,
                               account_pattern,
-                              account_scope)
+                              account_scope,
+                              user_dn_postfix_preference)
 
-        group_pattern = ldap_config.get('groupPattern', '')
-        if user_dn and group_pattern == '':
-            # User found and there is no group membership pattern to check.
+        group_pattern = ldap_config.get('groupPattern')
+        if user_dn and not group_pattern:
+            LOG.debug("User '%s' found but there is no group_pattern"
+                      " to check LDAP for group membership.",
+                      user_dn)
             return []
         group_pattern = group_pattern.replace('$USERDN$', user_dn)
 
-        LOG.debug('Checking for group membership.')
+        LOG.debug('Checking for group membership %s', user_dn)
 
         group_scope = ldap_config.get('groupScope', '')
         group_scope = get_ldap_query_scope(group_scope)

@@ -2,6 +2,7 @@
 
 # Test project configuration, tests are run on these files.
 TEST_PROJECT ?= TEST_PROJ=$(CURRENT_DIR)/tests/projects
+PYTHON_BIN ?= python3
 
 REPO_ROOT ?= REPO_ROOT=$(ROOT)
 
@@ -12,7 +13,7 @@ test_in_env: pycodestyle_in_env pylint_in_env test_unit_in_env test_functional_i
 
 test: pycodestyle pylint test_unit test_functional test_build_logger test_tu_collector
 
-PYCODESTYLE_TEST_CMD = pycodestyle bin codechecker_analyzer tests
+PYCODESTYLE_TEST_CMD = pycodestyle codechecker_analyzer tests
 
 pycodestyle:
 	$(PYCODESTYLE_TEST_CMD)
@@ -50,11 +51,11 @@ FUNCTIONAL_TEST_CMD = $(REPO_ROOT) $(TEST_PROJECT) \
 		nosetests $(NOSECFG) tests/functional || exit 1
 
 test_functional:
-	python3 $(ROOT)/scripts/test/check_clang.py || exit 1;
+	${PYTHON_BIN} $(ROOT)/scripts/test/check_clang.py || exit 1;
 	$(FUNCTIONAL_TEST_CMD)
 
 test_functional_in_env: venv_dev
-		python3 $(ROOT)/scripts/test/check_clang.py || exit 1;
+		${PYTHON_BIN} $(ROOT)/scripts/test/check_clang.py || exit 1;
 		$(ACTIVATE_DEV_VENV) && $(FUNCTIONAL_TEST_CMD)
 
 test_build_logger:

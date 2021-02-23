@@ -7,9 +7,9 @@
 </h1>
 
 <p align="center">
-  <a href="https://travis-ci.org/Ericsson/codechecker">
-    <img src="https://travis-ci.org/Ericsson/codechecker.png?branch=master"
-         alt="Travis">
+  <a href="https://github.com/Ericsson/codechecker/actions">
+    <img src="https://github.com/Ericsson/codechecker/workflows/codechecker-tests/badge.svg"
+         alt="Github Action">
   </a>
   <a href="https://gitter.im/codecheckerHQ/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link">
     <img src="https://badges.gitter.im/codecheckerHQ/Lobby.svg"
@@ -65,6 +65,70 @@ macOS (OS X) development environment.
     application, a [command-line tool](usage.md) and an
     [Eclipse plugin](http://github.com/Ericsson/CodeCheckerEclipsePlugin)
 
+## Command line features
+`CodeChecker` command has many subcommands which can be used for example to
+log and analyze your projects, print the results or start a web server. For
+full list see the following table or check the help message of this command
+(`CodeChecker --help`):
+
+| `CodeChecker` subcommand | Description |
+|--------------|-----------------------------------------|
+| `analyze` | Execute the supported code analyzers for the files recorded in a JSON Compilation Database. |
+| `analyzer-version` | Print the version of CodeChecker analyzer package that is being used. |
+| `analyzers` | List supported and available analyzers. |
+| `check` | Perform analysis on a project and print results to standard output. |
+| `checkers` | List the checkers available for code analysis. |
+| `cmd` | View analysis results on a running server from the command line. |
+| `fixit` | Apply automatic fixes based on the suggestions of the analyzers. |
+| `log` | Run a build command, collect the executed compilation commands and store them in a JSON file. |
+| `parse` | Print analysis summary and results in a human-readable format. |
+| `server` | Start and manage the CodeChecker Web server. |
+| `store` | Save analysis results to a database. |
+| `version` | Print the version of CodeChecker package that is being used. |
+| `web-version` | Print the version of CodeChecker server package that is being used. |
+
+
+`CodeChecker cmd` subcommand also has many other subcommands which can be used
+to get data (products, runs, results, statistics) from a running CodeChecker
+server. For full list see the following table or check the help message of this
+subcommand (`CodeChecker cmd --help`):
+
+| `CodeChecker cmd` subcommand | Description |
+|--------------|-----------------------------------------|
+| `runs` | List the available analysis runs. |
+| `history` | Show run history of multiple runs. |
+| `results` | List analysis result (finding) summary for a given run. |
+| `diff` | Compare two analysis runs and show the difference. |
+| `sum` | Show statistics of checkers. |
+| `token` | Access subcommands related to configuring personal access tokens managed by a CodeChecker server. |
+| `del` | Delete analysis runs. |
+| `update` | Update an analysis run. |
+| `suppress` | Manage and import suppressions of reports on a CodeChecker server. |
+| `products` | Access subcommands related to configuring the products managed by a CodeChecker server. |
+| `components` | Access subcommands related to configuring the source components managed by a CodeChecker server. |
+| `login` | Authenticate into CodeChecker servers that require privileges. |
+| `export` | Export comments and review statuses from CodeChecker. |
+| `import` | Import comments and review statuses into CodeChecker. |
+
+
+# Usage flow
+![Usage diagram](images/usage_flow.png)
+
+- *Step 1*: `CodeChecker log` runs the given build command and records the
+executed compilation steps. These steps are written to an output file
+(Compilation Database) in a JSON format.
+- *Step 2*: `CodeChecker analyze` uses the previously created JSON Compilation
+Database to perform an analysis on the project, outputting analysis results in
+a machine-readable (plist) format.
+- *Step 3*: in this step you can do multiple things:
+    - Parse and pretty-print the summary and results from analysis result files
+    (`CodeChecker parse`).
+    - Store the results to a running CodeChecker server (`CodeChecker store`).
+    - Compare two analysis results/runs to show the results that differ between
+    the two (`CodeChecker cmd diff`).
+    - etc.
+
+For more information how to use CodeChecker see our [user guide](usage.md).
 
 # User documentation
 
@@ -79,7 +143,7 @@ macOS (OS X) development environment.
 
 ## Web based report management
 * [Webserver User Guide](web/user_guide.md)
-* [WEB GUI User Guide](/web/server/www/userguide/userguide.md)
+* [WEB GUI User Guide](/web/server/vue-cli/src/assets/userguide/userguide.md)
 * [Command line and WEB UI Feature overview](feature_comparison.md)
 * Security configuration 
   * [Configuring Authentication](web/authentication.md)
@@ -108,6 +172,8 @@ The following tools are supported:
 |                | [Cppcheck](/tools/report-converter/README.md#cppcheck)    |
 |                | [Facebook Infer](/tools/report-converter/README.md#facebook-infer)    |
 |                | [Coccinelle](/tools/report-converter/README.md#coccinelle)    |
+|                | [Smatch](/tools/report-converter/README.md#smatch)    |
+|                | [Kernel-Doc](/tools/report-converter/README.md#kernel-doc)    |
 | **Java**       | [SpotBugs](/tools/report-converter/README.md#spotbugs)    |
 |                | [Facebook Infer](/tools/report-converter/README.md#fbinfer)    |
 | **Python**     | [Pylint](/tools/report-converter/README.md#pylint)    |
@@ -116,6 +182,7 @@ The following tools are supported:
 | **TypeScript** | [TSLint](/tools/report-converter/README.md#tslint)    |
 | **Go**         | [Golint](/tools/report-converter/README.md#golint)    |
 | **Markdown**   | [Markdownlint](/tools/report-converter/README.md#markdownlint)    |
+|                | [Sphinx](/tools/report-converter/Readme.md#sphinx)    |
 
 
 For details see 
@@ -125,7 +192,7 @@ For details see
 ## Common Tools
 Useful tools that can also be used outside CodeChecker.
 
-* [Build Logger (to generate JSON Compilation Database from your builds)](analyzer/tools/build-logger) 
+* [Build Logger (to generate JSON Compilation Database from your builds)](/analyzer/tools/build-logger/README.md)
 * [Plist to HTML converter (to generate HTML files from the given plist files)](/tools/plist_to_html/README.md)
 * [Report Converter Tool (to convert analysis results from other analyzers to the codechecker report directory format))](/tools/report-converter/README.md)
 * [Translation Unit Collector (to collect source files of a translation unit or to get source files which depend on the given header files)](/tools/tu_collector/README.md)
@@ -136,20 +203,27 @@ Useful tools that can also be used outside CodeChecker.
 
 # Install guide
 
+## Installing CodeChecker via Snap package manager
+CodeChecker is available on the [Snap Store](https://snapcraft.io/codechecker)
+and can be installed with the following command:
+```sh
+sudo snap install codechecker --classic
+```
+
 ## Linux
 
-For a detailed dependency list, and for instructions
-on how to install newer clang and clang-tidy versions
-please see [Requirements](deps.md).
-The following commands are used to bootstrap CodeChecker on Ubuntu 18.04 LTS:
+For a detailed dependency list, and for instructions on how to install newer
+Clang and Clang-Tidy versions, please see [Requirements](deps.md).
+The following commands are used to bootstrap CodeChecker on Ubuntu 20.04 LTS:
 
 ```sh
 # Install mandatory dependencies for a development and analysis environment.
-# NOTE: clang or clang-tidy can be replaced by any later versions of LLVM/Clang.
+# NOTE: clang or clang-tidy can be any sufficiently fresh version, and need not
+#       come from package manager!
 sudo apt-get install clang clang-tidy build-essential curl doxygen gcc-multilib \
-      git python-virtualenv python3-dev
+      git python3-dev python3-venv
 
-# Install nodejs dependency for web. In case of debian/ubuntu you can use the
+# Install nodejs dependency for web. In case of Debian/Ubuntu you can use the
 # following commands. For more information see the official docs:
 # https://nodejs.org/en/download/package-manager/
 curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
@@ -172,11 +246,16 @@ export PATH="$PWD/build/CodeChecker/bin:$PATH"
 cd ..
 ```
 
-**Note**: By default `make package` will build ldlogger shared objects for
+**Notes**:
+- By default `make package` will build ldlogger shared objects for
 `32bit` and `64bit` too. If you would like to build and package `64 bit only`
 shared objects and ldlogger binary you can set `BUILD_LOGGER_64_BIT_ONLY`
 environment variable to `YES` before the package build:
 `BUILD_LOGGER_64_BIT_ONLY=YES make package`.
+- By default the `make package` will build the UI code if it's not built yet
+or the UI code is changed. If you wouldn't like to build the UI code you can
+set the `BUILD_UI_DIST` environment variable to `NO` before the package build:
+`BUILD_UI_DIST=NO make package`.
 
 ### Upgrading environment after system or Python upgrade
 
@@ -188,7 +267,7 @@ out-of-the-box. To fix this issue, run the following command to upgrade your
 
 ```sh
 cd ~/codechecker/venv
-virtualenv -p /usr/bin/python3 .
+python3 -m venv .
 ```
 
 ## Mac OS X

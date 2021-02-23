@@ -16,6 +16,8 @@ CodeChecker result directory which can be stored to a CodeChecker server.
 |                | [Cppcheck](/tools/report-converter/README.md#cppcheck)    | ✓ |
 |                | [Facebook Infer](/tools/report-converter/README.md#fbinfer)    | ✓ |
 |                | [Coccinelle](/tools/report-converter/README.md#coccinelle)   | ✓ |
+|                | [Smatch](/tools/report-converter/README.md#smatch)   | ✓ |
+|                | [Kernel-Doc](/tools/report-converter/README.md#kernel-doc)   | ✓ |
 | **Java**       | [FindBugs](http://findbugs.sourceforge.net/)    | ✗ |
 |                | [SpotBugs](/tools/report-converter/README.md#spotbugs)    | ✓ |
 |                | [Facebook Infer](/tools/report-converter/README.md#fbinfer)    | ✓ |
@@ -31,6 +33,7 @@ CodeChecker result directory which can be stored to a CodeChecker server.
 |                | [Staticcheck](https://staticcheck.io/)    | ✗ |
 |                | [go-critic](https://github.com/go-critic/go-critic)    | ✗ |
 | **Markdown**   | [Markdownlint](https://github.com/markdownlint/markdownlint)    | ✓ |
+|                | [Sphinx](https://github.com/sphinx-doc/sphinx)    | ✓ |
 
 ## Clang Sanitizers
 | Name         | Support storage of analyzer results |

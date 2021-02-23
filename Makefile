@@ -1,8 +1,9 @@
 -include Makefile.local
 
-CURRENT_DIR = $(shell pwd)
+CURRENT_DIR = ${CURDIR}
 BUILD_DIR = $(CURRENT_DIR)/build
 VENDOR_DIR = $(CURRENT_DIR)/vendor
+PYTHON_BIN ?= python3
 
 CC_BUILD_DIR = $(BUILD_DIR)/CodeChecker
 CC_BUILD_BIN_DIR = $(CC_BUILD_DIR)/bin
@@ -13,6 +14,7 @@ CC_WEB = $(CURRENT_DIR)/web
 CC_SERVER = $(CC_WEB)/server/
 CC_CLIENT = $(CC_WEB)/client/
 CC_ANALYZER = $(CURRENT_DIR)/analyzer
+CC_COMMON = $(CURRENT_DIR)/codechecker_common
 
 CC_TOOLS = $(CURRENT_DIR)/tools
 CC_ANALYZER_TOOLS = $(CC_ANALYZER)/tools
@@ -90,7 +92,10 @@ package_statistics_collector: build_statistics_collector package_dir_structure
 	cd $(CC_BUILD_DIR) && \
 	ln -sf ../lib/python3/codechecker_statistics_collector/cli.py bin/post-process-stats
 
-package: package_dir_structure set_git_commit_template package_plist_to_html package_tu_collector package_report_converter package_report_hash package_merge_clang_extdef_mappings package_statistics_collector
+package_gerrit_skiplist:
+	cp -p scripts/gerrit_changed_files_to_skipfile.py $(CC_BUILD_DIR)/bin
+
+package: package_dir_structure set_git_commit_template package_plist_to_html package_tu_collector package_report_converter package_report_hash package_merge_clang_extdef_mappings package_statistics_collector package_gerrit_skiplist
 	BUILD_DIR=$(BUILD_DIR) BUILD_LOGGER_64_BIT_ONLY=$(BUILD_LOGGER_64_BIT_ONLY) $(MAKE) -C $(CC_ANALYZER) package_analyzer
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_WEB) package_web
 
@@ -107,17 +112,19 @@ package: package_dir_structure set_git_commit_template package_plist_to_html pac
 	cp -r $(CC_ANALYZER)/config/* $(CC_BUILD_DIR)/config && \
 	cp -r $(CC_WEB)/config/* $(CC_BUILD_DIR)/config && \
 	cp -r $(CC_SERVER)/config/* $(CC_BUILD_DIR)/config && \
-	./scripts/build/extend_version_file.py -r $(ROOT) \
-	  $(CC_BUILD_DIR)/config/analyzer_version.json \
-	  $(CC_BUILD_DIR)/config/web_version.json
+	${PYTHON_BIN} ./scripts/build/extend_version_file.py -r $(ROOT) \
+	$(CC_BUILD_DIR)/config/analyzer_version.json \
+	$(CC_BUILD_DIR)/config/web_version.json
 
 	mkdir -p $(CC_BUILD_DIR)/cc_bin && \
-	./scripts/build/create_commands.py -b $(BUILD_DIR) \
-		$(ROOT)/bin:codechecker_common/cmd \
-		$(CC_WEB)/bin:codechecker_web/cmd \
-		$(CC_SERVER)/bin:codechecker_server/cmd \
-		$(CC_CLIENT)/bin:codechecker_client/cmd \
-		$(CC_ANALYZER)/bin:codechecker_analyzer/cmd
+	${PYTHON_BIN} ./scripts/build/create_commands.py -b $(BUILD_DIR) \
+	  --cmd-dir codechecker_common/cmd \
+	    $(CC_WEB)/codechecker_web/cmd \
+	    $(CC_SERVER)/codechecker_server/cmd \
+	    $(CC_CLIENT)/codechecker_client/cmd \
+	    $(CC_ANALYZER)/codechecker_analyzer/cmd \
+	  --bin-file $(ROOT)/bin/CodeChecker \
+	  --cc-bin-file $(ROOT)/bin/CodeChecker.py
 
 	# Copy license file.
 	cp $(ROOT)/LICENSE.TXT $(CC_BUILD_DIR)
@@ -131,21 +138,21 @@ standalone_package: venv package
 	# the virtual environment beforehand.
 	cd $(CC_BUILD_BIN_DIR) && \
 	mv CodeChecker _CodeChecker && \
-	$(ROOT)/scripts/build/wrap_binary_in_venv.py \
+	${PYTHON_BIN} $(ROOT)/scripts/build/wrap_binary_in_venv.py \
 		-e $(ROOT)/venv \
 		-b _CodeChecker \
 		-o CodeChecker
 
 venv:
 	# Create a virtual environment which can be used to run the build package.
-	virtualenv -p python3 venv && \
+	python3 -m venv venv --prompt="CodeChecker venv" && \
 		$(ACTIVATE_RUNTIME_VENV) && \
 		pip3 install -r $(CC_ANALYZER)/requirements.txt && \
 		pip3 install -r $(CC_WEB)/requirements.txt
 
 venv_osx:
 	# Create a virtual environment which can be used to run the build package.
-	virtualenv -p python3 venv && \
+	python3 -m venv venv --prompt="CodeChecker venv" && \
 		$(ACTIVATE_RUNTIME_VENV) && \
 		pip3 install -r $(CC_ANALYZER)/requirements_py/osx/requirements.txt && \
 		pip3 install -r $(CC_WEB)/requirements_py/osx/requirements.txt
@@ -163,7 +170,7 @@ pip_dev_deps:
 
 venv_dev:
 	# Create a virtual environment for development.
-	virtualenv -p python3 venv_dev && \
+	python3 -m venv venv_dev --prompt="CodeChecker venv-dev" && \
 		$(ACTIVATE_DEV_VENV) && $(PIP_DEV_DEPS_CMD)
 
 clean_venv_dev:
@@ -194,10 +201,6 @@ clean_report_hash:
 clean_statistics_collector:
 	$(MAKE) -C $(CC_ANALYZER_TOOLS)/statistics_collector clean
 
-clean_travis:
-	# Clean CodeChecker config files stored in the users home directory.
-	rm -rf ~/.codechecker*
-
 PYLINT_CMD = $(MAKE) -C $(CC_ANALYZER) pylint && \
   $(MAKE) -C $(CC_WEB) pylint && \
   pylint -j0 ./bin/** ./codechecker_common \
@@ -222,9 +225,15 @@ pycodestyle:
 pycodestyle_in_env:
 	$(ACTIVATE_DEV_VENV) && $(PYCODE_CMD)
 
-test: test_analyzer test_web
+test: test_common test_analyzer test_web
 
-test_in_env: test_analyzer_in_env test_web_in_env
+test_in_env: test_common_in_env test_analyzer_in_env test_web_in_env
+
+test_common:
+	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_COMMON)/tests/unit test_unit
+
+test_common_in_env:
+	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_COMMON)/tests/unit test_unit_in_env
 
 test_analyzer:
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_ANALYZER) test
@@ -261,6 +270,7 @@ test_web_in_env:
 test_unit:
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_ANALYZER) test_unit
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_WEB) test_unit
+	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_COMMON)/tests/unit test_unit
 
 test_unit_in_env:
 	BUILD_DIR=$(BUILD_DIR) $(MAKE) -C $(CC_ANALYZER) test_unit_in_env

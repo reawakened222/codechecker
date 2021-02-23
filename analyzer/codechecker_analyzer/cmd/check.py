@@ -14,6 +14,7 @@ stdout.
 import argparse
 import os
 import shutil
+import sys
 import tempfile
 
 from codechecker_analyzer import analyzer_context
@@ -47,7 +48,8 @@ performs every step of doing the analysis in batch.""",
         # Epilogue is shown after the arguments when the help is queried
         # directly.
         'epilog': """
-environment variables:
+Environment variables
+------------------------------------------------
   CC_ANALYZERS_FROM_PATH   Set to `yes` or `1` to enforce taking the analyzers
                            from the `PATH` instead of the given binaries.
   CC_CLANGSA_PLUGIN_DIR    If the CC_ANALYZERS_FROM_PATH environment variable
@@ -56,9 +58,16 @@ environment variables:
                            variable.
   CC_SEVERITY_MAP_FILE     Path of the checker-severity mapping config file.
                            Default: {}
+  CC_LOGGER_DEBUG_FILE     If -b and -o flags are used with debug logs, the
+                           logging phase emits its debug logs in
+                           'codechecker.logger.debug' under the output
+                           directory by default. This environment variable
+                           can be given a file path which overrides this
+                           default location.
 
 
-issue hashes:
+Issue hashes
+------------------------------------------------
 - By default the issue hash calculation method for 'Clang Static Analyzer' is
 context sensitive. It means the hash will be generated based on the following
 information:
@@ -95,6 +104,17 @@ generated and not the context free hash (kept for backward compatibility). Use
 OUR RECOMMENDATION: we recommend you to use 'context-free-v2' hash because the
 hash will not be changed so easily for example on code indentation or when a
 checker is renamed.
+
+For more information see:
+https://github.com/Ericsson/codechecker/blob/master/docs/analyzer/report_identification.md
+
+Exit status
+------------------------------------------------
+0 - Successful analysis and no new reports
+1 - CodeChecker error
+2 - At least one report emitted by an analyzer and there is no analyzer failure
+3 - Analysis of at least one translation unit failed
+128+signum - Terminating on a fatal signal whose number is signum
 
 
 If you wish to reuse the logfile resulting from executing the build, see
@@ -381,7 +401,10 @@ used to generate a log file on the fly.""")
                                     "default behaviour of this option you can "
                                     "use the "
                                     "'clang-tidy:take-config-from-directory="
-                                    "true' option.")
+                                    "true' option. If the file at --tidyargs "
+                                    "contains a -config flag then those "
+                                    "options extend these and override "
+                                    "\"HeaderFilterRegex\" if any.")
 
     analyzer_opts.add_argument('--checker-config',
                                dest='checker_config',
@@ -499,9 +522,10 @@ is called.""")
                                   action='store',
                                   dest='ctu_ast_mode',
                                   choices=['load-from-pch', 'parse-on-demand'],
-                                  default='parse-on-demand',
+                                  default=argparse.SUPPRESS,
                                   help="Choose the way ASTs are loaded during "
-                                       "CTU analysis. Mode 'load-from-pch' "
+                                       "CTU analysis. Only available if CTU "
+                                       "mode is enabled. Mode 'load-from-pch' "
                                        "generates PCH format serialized ASTs "
                                        "during the 'collect' phase. Mode "
                                        "'parse-on-demand' only generates the "
@@ -511,7 +535,8 @@ is called.""")
                                        "serialized ASTs, while mode "
                                        "'parse-on-demand' can incur some "
                                        "runtime CPU overhead in the second "
-                                       "phase of the analysis.")
+                                       "phase of the analysis. (default: "
+                                       "parse-on-demand)")
 
     if analyzer_types.is_statistics_capable(context):
         stat_opts = parser.add_argument_group(
@@ -667,7 +692,12 @@ output of "CodeChecker checkers --guideline" command.""")
                                default=argparse.SUPPRESS,
                                help="Force the running analyzers to use "
                                     "almost every checker available. The "
-                                    "checker groups 'alpha.', 'debug.' and "
+                                    "checker groups 'alpha.', 'debug.',"
+                                    "'osx.', 'abseil-', 'android-', "
+                                    "'darwin-', 'objc-', "
+                                    "'cppcoreguidelines-', 'fuchsia.', "
+                                    "'fuchsia-', 'hicpp-', 'llvm-', "
+                                    "'llvmlibc-', 'google-', 'zircon-', "
                                     "'osx.' (on Linux) are NOT enabled "
                                     "automatically and must be EXPLICITLY "
                                     "specified. WARNING! Enabling all "
@@ -708,6 +738,10 @@ def main(args):
 
     logger.setup_logger(args.verbose if 'verbose' in args else None)
 
+    if 'ctu_ast_mode' in args and 'ctu_phases' not in args:
+        LOG.error("Analyzer option 'ctu-ast-mode' requires CTU mode enabled")
+        sys.exit(1)
+
     def __update_if_key_exists(source, target, key):
         """Append the source Namespace's element with 'key' to target with
         the same key, but only if it exists."""
@@ -745,6 +779,14 @@ def main(args):
             import codechecker_analyzer.cmd.log as log_module
             LOG.debug("Calling LOG with args:")
             LOG.debug(log_args)
+
+            # If not explicitly given the debug log file of ld_logger is placed
+            # in report directory if any. Otherwise parallel "CodeChecker
+            # check" commands would overwrite each other's log files under /tmp
+            # which is the default location for "CodeChecker check".
+            if 'CC_LOGGER_DEBUG_FILE' not in os.environ:
+                os.environ['CC_LOGGER_DEBUG_FILE'] = \
+                    os.path.join(output_dir, 'codechecker.logger.debug')
 
             log_module.main(log_args)
         elif 'logfile' in args:
@@ -798,7 +840,7 @@ def main(args):
         LOG.debug("Calling ANALYZE with args:")
         LOG.debug(analyze_args)
 
-        analyze_module.main(analyze_args)
+        analysis_exit_status = analyze_module.main(analyze_args)
 
         # --- Step 3.: Print to stdout.
         parse_args = argparse.Namespace(
@@ -828,3 +870,5 @@ def main(args):
             os.remove(logfile)
 
     LOG.debug("Check finished.")
+
+    return analysis_exit_status

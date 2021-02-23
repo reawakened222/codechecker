@@ -12,11 +12,12 @@ Test case for the CodeChecker fixit command's direct functionality.
 """
 
 
+import datetime
 import json
 import os
-import pathlib
 import shutil
 import subprocess
+import time
 import unittest
 
 from distutils.spawn import find_executable
@@ -60,7 +61,7 @@ class TestFixit(unittest.TestCase):
 
         # Create a compilation database.
         build_log = [{"directory": self.test_workspace,
-                      "command": "clang++ -c " + source_file_cpp,
+                      "command": "g++ -c -std=c++98 " + source_file_cpp,
                       "file": source_file_cpp
                       }]
 
@@ -101,7 +102,7 @@ int main()
 
         # THEN
         errcode = process.returncode
-        self.assertEqual(errcode, 0)
+        self.assertEqual(errcode, 2)
 
         fixit_dir = os.path.join(self.report_dir, 'fixit')
         self.assertTrue(os.path.isdir(fixit_dir))
@@ -152,7 +153,7 @@ int main()
 
         # Create a compilation database.
         build_log = [{"directory": self.test_workspace,
-                      "command": "clang++ -c " + source_file_cpp,
+                      "command": "g++ -c -std=c++98 " + source_file_cpp,
                       "file": source_file_cpp
                       }]
 
@@ -193,7 +194,7 @@ int main()
 
         # THEN
         errcode = process.returncode
-        self.assertEqual(errcode, 0)
+        self.assertEqual(errcode, 2)
 
         fixit_dir = os.path.join(self.report_dir, 'fixit')
         self.assertTrue(os.path.isdir(fixit_dir))
@@ -211,7 +212,12 @@ int main()
             'Skipped files due to modification since last analysis',
             err)
 
-        pathlib.Path(source_file_cpp).touch()
+        # We're setting the timestamp if the file one hour forward so we
+        # simulate file modification. In this case the fixits are not applied
+        # and this is also printed to the standard output.
+        date = datetime.datetime.now() + datetime.timedelta(hours=1)
+        mod_time = time.mktime(date.timetuple())
+        os.utime(source_file_cpp, (mod_time, mod_time))
 
         process = subprocess.Popen(
             [self._codechecker_cmd, 'fixit', self.report_dir],
@@ -309,7 +315,8 @@ int main()
             cwd=self.test_workspace,
             encoding="utf-8",
             errors="ignore")
-        out, _ = process.communicate()
+        out, err = process.communicate()
+        print('\n' + out + '\n')
 
         process = subprocess.Popen(
             fixit_cmd,
@@ -318,6 +325,6 @@ int main()
             stdin=subprocess.PIPE,
             encoding="utf-8",
             errors="ignore")
-        out, _ = process.communicate(input=out)
-
+        out, err = process.communicate(input=out)
+        print('\n' + out + '\n')
         self.assertEqual(out.count("DiagnosticMessage"), 1)

@@ -257,7 +257,8 @@ def perform_analysis(args, skip_handler, context, actions, metadata_tool,
             state, _ = data
             metadata_info['checkers'].update({
                 check: state == CheckerState.enabled})
-            enabled_checkers[analyzer].append(check)
+            if state == CheckerState.enabled:
+                enabled_checkers[analyzer].append(check)
 
         version = config_map[analyzer].get_version(check_env)
         metadata_info['analyzer_statistics']['version'] = version
@@ -294,6 +295,7 @@ def perform_analysis(args, skip_handler, context, actions, metadata_tool,
     manager = SyncManager()
     manager.start(__mgr_init)
 
+    config_map = manager.dict(config_map)
     actions_map = create_actions_map(actions, manager)
 
     # Setting to not None value will enable statistical analysis features.

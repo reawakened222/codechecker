@@ -1,14 +1,20 @@
 <template>
-  <v-tooltip max-width="300" right>
+  <v-tooltip
+    max-width="300"
+    color="black"
+    right
+  >
     <template v-slot:activator="{ on }">
-      <v-icon
-        color="accent"
-        class="ml-1"
-        small
-        v-on="on"
-      >
-        mdi-help-circle
-      </v-icon>
+      <slot :on="on" name="activator">
+        <v-icon
+          :color="color"
+          class="ml-1"
+          small
+          v-on="on"
+        >
+          mdi-help-circle
+        </v-icon>
+      </slot>
     </template>
     <slot />
   </v-tooltip>
@@ -16,6 +22,9 @@
 
 <script>
 export default {
-  name: "TooltipHelpIcon"
+  name: "TooltipHelpIcon",
+  props: {
+    color: { type: String, default: "accent" }
+  }
 };
 </script>

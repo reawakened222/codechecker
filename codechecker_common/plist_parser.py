@@ -36,6 +36,7 @@ import os
 import sys
 import traceback
 import plistlib
+from typing import List, Dict, Tuple
 from xml.parsers.expat import ExpatError
 
 from codechecker_common.logger import get_logger
@@ -72,8 +73,18 @@ class LXMLPlistParser(plistlib._PlistParser):
     The benefit of this library that this is faster than other libraries so it
     will improve the performance of the plist parsing.
     """
-    def __init__(self, use_builtin_types=True, dict_type=dict):
-        plistlib._PlistParser.__init__(self, use_builtin_types, dict_type)
+    def __init__(self, dict_type=dict):
+        # Since Python 3.9 plistlib._PlistParser.__init__ has changed:
+        # https://github.com/python/cpython/commit/ce81a925ef
+        # To be backward compatible with old interpreters we need to call this
+        # function based on conditions:
+        params = plistlib._PlistParser.__init__.__code__.co_varnames
+        if len(params) == 3 and "use_builtin_types" in params:
+            # Before 3.9 interpreter.
+            plistlib._PlistParser.__init__(self, True, dict_type)
+        else:
+            plistlib._PlistParser.__init__(  # pylint: disable=E1120
+                self, dict_type)
 
         self.event_handler = LXMLPlistEventHandler()
         self.event_handler.start = self.handle_begin_element
@@ -131,12 +142,15 @@ def get_checker_name(diagnostic, path=""):
     """
     checker_name = diagnostic.get('check_name')
     if not checker_name:
-        LOG.warning("Check name wasn't found in the plist file '%s'. ", path)
+        LOG.warning("Check name wasn't found in the plist file '%s'. It is "
+                    "available since 'Clang v3.7'.", path)
         checker_name = "unknown"
     return checker_name
 
 
-def parse_plist_file(path, source_root=None, allow_plist_update=True):
+def parse_plist_file(path: str,
+                     allow_plist_update=True) \
+                             -> Tuple[Dict[int, str], List[Report]]:
     """
     Parse the reports from a plist file.
     One plist file can contain multiple reports.
@@ -144,7 +158,8 @@ def parse_plist_file(path, source_root=None, allow_plist_update=True):
     LOG.debug("Parsing plist: %s", path)
 
     reports = []
-    files = []
+    source_files = {}
+
     try:
         plist = None
         with open(path, 'rb') as plist_file_obj:
@@ -152,13 +167,17 @@ def parse_plist_file(path, source_root=None, allow_plist_update=True):
 
         if not plist:
             LOG.error("Failed to parse plist %s", path)
-            return files, reports
+            return {}, []
 
-        files = plist['files']
         metadata = plist.get('metadata')
 
+        mentioned_files = plist.get('files', [])
+
+        # file index to filepath that bugpath events refer to
+        source_files = \
+            {i: filepath for i, filepath in enumerate(mentioned_files)}
         diag_changed = False
-        for diag in plist['diagnostics']:
+        for diag in plist.get('diagnostics', []):
 
             available_keys = list(diag.keys())
 
@@ -172,15 +191,13 @@ def parse_plist_file(path, source_root=None, allow_plist_update=True):
             # by older clang version (before 3.7).
             main_section['check_name'] = get_checker_name(diag, path)
 
-            # We need to extend information for plist files generated
-            # by older clang version (before 3.8).
-            file_path = files[diag['location']['file']]
-            if source_root:
-                file_path = os.path.join(source_root, file_path.lstrip('/'))
-
             report_hash = diag.get('issue_hash_content_of_line_in_context')
 
             if not report_hash:
+                file_path = os.path.join(
+                    os.path.dirname(path),
+                    mentioned_files[diag['location']['file']])
+
                 # Generate hash value if it is missing from the report.
                 report_hash = get_report_hash(diag, file_path,
                                               HashType.PATH_SENSITIVE)
@@ -195,15 +212,17 @@ def parse_plist_file(path, source_root=None, allow_plist_update=True):
                 diag_changed = True
 
             bug_path_items = [item for item in diag['path']]
-
-            report = Report(main_section, bug_path_items, files, metadata)
-            reports.append(report)
+            reports.append(Report(main_section,
+                                  bug_path_items,
+                                  source_files,
+                                  metadata))
 
         if diag_changed and allow_plist_update:
             # If the diagnostic section has changed we update the plist file.
             # This way the client will always send a plist file where the
             # report hash field is filled.
-            plistlib.dump(plist, path)
+            with open(path, 'wb') as plist_file:
+                plistlib.dump(plist, plist_file)
     except IndexError as iex:
         LOG.warning('Indexing error during processing plist file %s', path)
         LOG.warning(type(iex))
@@ -217,7 +236,7 @@ def parse_plist_file(path, source_root=None, allow_plist_update=True):
         LOG.warning(type(ex))
         LOG.warning(ex)
     finally:
-        return files, reports
+        return source_files, reports
 
 
 def fids_in_range(rng):

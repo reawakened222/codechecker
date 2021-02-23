@@ -22,8 +22,8 @@ from codechecker_client import cmd_line_client
 from codechecker_client import product_client
 from codechecker_client import source_component_client, token_client
 
-from codechecker_common import arg, logger, output_formatters, util
-
+from codechecker_common import arg, logger, util
+from codechecker_common.output import USER_FORMATS
 
 DEFAULT_FILTER_VALUES = {
     'review_status': ['unreviewed', 'confirmed'],
@@ -31,7 +31,7 @@ DEFAULT_FILTER_VALUES = {
     'uniqueing': 'off'
 }
 
-DEFAULT_OUTPUT_FORMATS = ["plaintext"] + output_formatters.USER_FORMATS
+DEFAULT_OUTPUT_FORMATS = ["plaintext"] + USER_FORMATS
 
 
 def valid_time(t):
@@ -267,7 +267,7 @@ def __add_filtering_arguments(parser, defaults=None, diff_mode=False):
                          help="Filter results by version tag names." +
                          warn_diff_mode)
 
-    f_group.add_argument('--open-reports-date',
+    f_group.add_argument('--outstanding-reports-date', '--open-reports-date',
                          type=valid_time,
                          dest="open_reports_date",
                          metavar='TIMESTAMP',
@@ -496,7 +496,10 @@ def __register_diff(parser):
                              "can contain * quantifiers which matches any "
                              "number of characters (zero or more). So if you "
                              "have run-a-1, run-a-2 and run-b-1 then "
-                             "\"run-a*\" selects the first two.")
+                             "\"run-a*\" selects the first two. In case of "
+                             "run names tag labels can also be used separated "
+                             "by a colon (:) character: "
+                             "\"run_name:tag_name\".")
 
     parser.add_argument('-n', '--newname',
                         type=str,
@@ -513,7 +516,10 @@ def __register_diff(parser):
                              "contain * quantifiers which matches any number "
                              "of characters (zero or more). So if you have "
                              "run-a-1, run-a-2 and run-b-1 then "
-                             "\"run-a*\" selects the first two.")
+                             "\"run-a*\" selects the first two. In case of "
+                             "run names tag labels can also be used separated "
+                             "by a colon (:) character: "
+                             "\"run_name:tag_name\".")
 
     __add_filtering_arguments(parser, DEFAULT_FILTER_VALUES, True)
 
@@ -1163,6 +1169,34 @@ def __register_run_histories(parser):
                              "runs.")
 
 
+def __register_export(parser):
+    """
+    Add argparser subcommand for the "export run by run name action"
+    """
+    parser.add_argument('-n', '--name',
+                        type=str,
+                        nargs='+',
+                        dest="names",
+                        metavar='RUN_NAME',
+                        default=argparse.SUPPRESS,
+                        help="Name of the analysis run.")
+
+
+def __register_importer(parser):
+    """
+    Add argparser subcommand for the "import run by run name action"
+    """
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-i', '--import',
+                       type=str,
+                       dest="input",
+                       metavar='JSON_FILE',
+                       default=argparse.SUPPRESS,
+                       help="Import findings from the json file into "
+                       "the database.")
+
+
 def __register_token(parser):
     """
     Add argparse subcommand parser for the "handle token" action.
@@ -1314,7 +1348,11 @@ by multiple severity values:
                       "- gerrit: a 'gerrit_review.json' file will be " \
                       "generated in the export directory.\n" \
                       "- codeclimate: a 'codeclimate_issues.json' file will " \
-                      "be generated in the export directory."
+                      "be generated in the export directory.\n" \
+                      "For the output formats (json, gerrit, codeclimate) " \
+                      "if an export directory is set the output files will " \
+                      "be generated if not the results are printed to the " \
+                      "stdout but only if one format was selected."
 
     __add_common_arguments(diff,
                            output_formats=diff_output_formats,
@@ -1425,6 +1463,29 @@ full runs.""",
     __register_login(login)
     login.set_defaults(func=cmd_line_client.handle_login)
     __add_common_arguments(login, needs_product_url=False)
+
+    export = subcommands.add_parser(
+        'export',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Export data (comments, review statuses) from a running "
+                    "CodeChecker server into a json format",
+        help="Export data from a CodeChecker server to json format."
+    )
+    __register_export(export)
+    export.set_defaults(func=cmd_line_client.handle_export)
+    __add_common_arguments(export)
+
+    importer = subcommands.add_parser(
+        'import',
+        formatter_class=arg.RawDescriptionDefaultHelpFormatter,
+        description="Import the results into CodeChecker server",
+        help="Import the analysis from a json file exported by the "
+             "'CodeChecker cmd export' command into CodeChecker"
+    )
+    __register_importer(importer)
+    importer.set_defaults(func=cmd_line_client.handle_import)
+    __add_common_arguments(importer)
+
 
 # 'cmd' does not have a main() method in itself, as individual subcommands are
 # handled later on separately.

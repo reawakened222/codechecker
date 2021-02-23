@@ -53,7 +53,7 @@ def call_command(cmd, cwd, env):
             encoding="utf-8",
             errors="ignore")
         out, err = proc.communicate()
-        if proc.returncode != 0:
+        if proc.returncode == 1:
             show(out, err)
             print('Unsuccessful run: "' + ' '.join(cmd) + '"')
             raise Exception("Unsuccessful run of command.")
@@ -467,6 +467,10 @@ def store(codechecker_cfg, test_project_name):
     if force:
         store_cmd.extend(['--force'])
 
+    trim_path = codechecker_cfg.get('trim_path_prefix')
+    if trim_path:
+        store_cmd.extend(['--trim-path-prefix', trim_path])
+
     try:
         print('STORE: ' + ' '.join(store_cmd))
         proc = subprocess.Popen(
@@ -690,6 +694,10 @@ def add_test_package_product(server_data, test_folder, check_env=None,
 
         add_command.append('--postgresql')
         pg_config['dbname'] = server_data['viewer_product']
+
+        if os.environ.get('PGPASSWORD'):
+            pg_config['dbpassword'] = os.environ['PGPASSWORD']
+
         add_command += _pg_db_config_to_cmdline_params(pg_config)
     else:
         # SQLite databases are put under the workspace of the appropriate test.
