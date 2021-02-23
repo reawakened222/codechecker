@@ -1,7 +1,7 @@
 {
   "runtime": {
     "analyzers": {
-      "clangsa": "clang",
+      "clangsa": "clang-11",
       "clang-tidy": "clang-tidy"
     },
     "clang-apply-replacements": "clang-apply-replacements"
