@@ -40,6 +40,8 @@ from codechecker_report_converter.sanitizers.ub.analyzer_result import \
     UBSANAnalyzerResult  # noqa
 from codechecker_report_converter.spotbugs.analyzer_result import \
     SpotBugsAnalyzerResult  # noqa
+from codechecker_report_converter.pmd.analyzer_result import \
+    PMDAnalyzerResult  # noqa
 from codechecker_report_converter.eslint.analyzer_result import \
     ESLintAnalyzerResult  # noqa
 from codechecker_report_converter.pylint.analyzer_result import \
@@ -97,6 +99,7 @@ supported_converters = {
     TSLintAnalyzerResult.TOOL_NAME: TSLintAnalyzerResult,
     UBSANAnalyzerResult.TOOL_NAME: UBSANAnalyzerResult,
     SpotBugsAnalyzerResult.TOOL_NAME: SpotBugsAnalyzerResult,
+    PMDAnalyzerResult.TOOL_NAME: PMDAnalyzerResult,
     MarkdownlintAnalyzerResult.TOOL_NAME: MarkdownlintAnalyzerResult,
     CoccinelleAnalyzerResult.TOOL_NAME: CoccinelleAnalyzerResult,
     SmatchAnalyzerResult.TOOL_NAME: SmatchAnalyzerResult,
